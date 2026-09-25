@@ -95,7 +95,7 @@ export default function TimetablePage() {
   }
 
   if (!student) {
-    return <main className="min-h-screen bg-slate-50" aria-busy="true" />;
+    return <main className="app-shell min-h-screen bg-slate-50" aria-busy="true" />;
   }
 
   const studentInitials = student.fullName
@@ -107,7 +107,7 @@ export default function TimetablePage() {
     .toUpperCase();
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
+    <main className="app-shell min-h-screen bg-slate-50 text-slate-900">
       <style>{`
         @keyframes timetable-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         .timetable-rise { animation: timetable-rise 500ms ease-out both; }

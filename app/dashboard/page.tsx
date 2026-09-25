@@ -71,7 +71,7 @@ export default function DashboardPage() {
   }
 
   if (!student) {
-    return <main className="min-h-screen bg-slate-50" aria-busy="true" />;
+    return <main className="app-shell min-h-screen bg-slate-50" aria-busy="true" />;
   }
 
   const studentInitials = student.fullName
@@ -87,13 +87,13 @@ export default function DashboardPage() {
 
   const overview = [
     { label: "Current Class", value: student.className, note: "Current class", icon: "▤", tone: "bg-blue-50 text-blue-700" },
-    { label: "Overall Average", value: `${overallAverage}%`, note: "Across all subjects", icon: "✦", tone: "bg-violet-50 text-violet-700" },
+    { label: "Overall Average", value: `${overallAverage}%`, note: "Sample preview · not an official result", icon: "✦", tone: "bg-violet-50 text-violet-700" },
     { label: "Attendance", value: "Not available", note: "No attendance records yet", icon: "✓", tone: "bg-emerald-50 text-emerald-700" },
     { label: "Position in Class", value: "Not available", note: "Not available yet", icon: "↗", tone: "bg-amber-50 text-amber-700" },
   ];
 
   return (
-    <main id="dashboard" className="min-h-screen bg-slate-50 text-slate-900">
+    <main id="dashboard" className="app-shell min-h-screen bg-slate-50 text-slate-900">
       <style>{`
         @keyframes dashboard-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         .dashboard-rise { animation: dashboard-rise 500ms ease-out both; }
@@ -198,8 +198,8 @@ export default function DashboardPage() {
               </div>
             </section>
 
-            <div className="grid gap-7 xl:grid-cols-[1.25fr_1fr]">
-              <section id="recent-results" className="dashboard-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6" style={{ animationDelay: "120ms" }}>
+            <div className="grid min-w-0 gap-7 xl:grid-cols-[1.25fr_1fr]">
+              <section id="recent-results" className="dashboard-rise min-w-0 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6" style={{ animationDelay: "120ms" }}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-lg font-bold">Recent Results</h2>
@@ -224,7 +224,7 @@ export default function DashboardPage() {
                 </div>
               </section>
 
-              <section id="upcoming" className="dashboard-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6" style={{ animationDelay: "170ms" }}>
+              <section id="upcoming" className="dashboard-rise min-w-0 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6" style={{ animationDelay: "170ms" }}>
                 <div>
                   <h2 className="text-lg font-bold">Upcoming</h2>
                   <p className="mt-1 text-sm text-slate-500">Sample tests, assignments, and school events</p>

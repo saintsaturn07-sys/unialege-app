@@ -1,26 +1,12 @@
 export type AdminSession = { username: string; name: string };
 
-export const ADMIN_DEMO_CREDENTIALS = {
-  username: "admin@unialege.edu",
-  password: "AdminDemo!2026",
-  name: "School Administrator",
-};
-
 const ADMIN_SESSION_KEY = "unialege-admin-session";
 
-export function signInAdmin(username: string, password: string) {
-  if (
-    username.trim().toLowerCase() !== ADMIN_DEMO_CREDENTIALS.username ||
-    password !== ADMIN_DEMO_CREDENTIALS.password
-  ) {
-    return false;
-  }
-
-  window.localStorage.setItem(
-    ADMIN_SESSION_KEY,
-    JSON.stringify({ username: ADMIN_DEMO_CREDENTIALS.username, name: ADMIN_DEMO_CREDENTIALS.name }),
-  );
-  return true;
+// TEMPORARY DEMO AUTHENTICATION: credential verification is performed by the
+// server route. Replace this browser-only session with a real server session
+// before using the portal for production school accounts.
+export function saveAdminSession(session: AdminSession) {
+  window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
 }
 
 export function getAdminSession(): AdminSession | null {
@@ -30,7 +16,7 @@ export function getAdminSession(): AdminSession | null {
     const value: unknown = JSON.parse(raw);
     if (
       typeof value === "object" && value !== null &&
-      "username" in value && value.username === ADMIN_DEMO_CREDENTIALS.username &&
+      "username" in value && typeof value.username === "string" &&
       "name" in value && typeof value.name === "string"
     ) {
       return { username: value.username, name: value.name };
@@ -42,5 +28,9 @@ export function getAdminSession(): AdminSession | null {
 }
 
 export function clearAdminSession() {
-  window.localStorage.removeItem(ADMIN_SESSION_KEY);
+  try {
+    window.localStorage.removeItem(ADMIN_SESSION_KEY);
+  } catch {
+    // A blocked browser store is already effectively signed out.
+  }
 }

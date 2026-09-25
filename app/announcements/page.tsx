@@ -56,12 +56,12 @@ export default function AnnouncementsPage() {
     setReadIds((current) => current.includes(item.id) ? current : [...current, item.id]);
   }
 
-  if (!student) return <main className="min-h-screen bg-slate-50" aria-busy="true" />;
+  if (!student) return <main className="app-shell min-h-screen bg-slate-50" aria-busy="true" />;
 
   const initials = student.fullName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
+    <main className="app-shell min-h-screen bg-slate-50 text-slate-900">
       <style>{`@keyframes announcements-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } .announcements-rise { animation: announcements-rise 450ms ease-out both; } @media (prefers-reduced-motion: reduce) { .announcements-rise { animation: none; } }`}</style>
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col md:flex-row">
         <aside className="border-b border-slate-200 bg-white md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:border-r md:border-b-0">

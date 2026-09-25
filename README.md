@@ -15,7 +15,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Temporary admin demo access
 
-Open `/admin/login` and use the temporary development credentials shown on that page. This client-side demo login is for local evaluation only; it is not production authentication.
+Open `/admin/login` and use the temporary development credentials: `admin@unialege.edu` / `AdminDemo!2026`. The fixed demo credentials are verified by a Next.js server route; a browser-local session is saved only after verification. This is temporary demo authentication, not production school authentication.
 
 From Admin → Students, create a student and issue their Admission Number and Password. The student can then sign in at `/login`. Student accounts and sessions are stored in that browser's localStorage. They are not shared between browsers or devices and may be cleared by the browser.
 

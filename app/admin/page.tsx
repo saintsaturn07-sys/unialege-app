@@ -30,10 +30,10 @@ export default function AdminDashboardPage() {
     clearAdminSession();
   }
 
-    if (!admin) return <main className="min-h-screen bg-slate-50" aria-busy="true" />;
+  if (!admin) return <main className="app-shell min-h-screen bg-slate-50" aria-busy="true" />;
 
   const metrics = [
-    { label: "Student Accounts", value: studentCount === null ? "…" : String(studentCount), note: "Created by this administrator", icon: "◉", tone: "bg-blue-50 text-blue-700" },
+    { label: "Student Accounts", value: studentCount === null ? "…" : `${studentCount} Students`, note: "Created by this administrator", icon: "◉", tone: "bg-blue-50 text-blue-700" },
     { label: "Classes", value: "Not available", note: "Class management coming soon", icon: "▤", tone: "bg-violet-50 text-violet-700" },
     { label: "Fee Records", value: "Not available", note: "No payment system connected", icon: "₦", tone: "bg-amber-50 text-amber-700" },
     { label: "Results", value: "Not available", note: "Results management coming soon", icon: "✓", tone: "bg-emerald-50 text-emerald-700" },
@@ -41,7 +41,7 @@ export default function AdminDashboardPage() {
   ];
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
+    <main className="app-shell min-h-screen bg-slate-50 text-slate-900">
       <style>{`@keyframes admin-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } .admin-rise { animation: admin-rise 450ms ease-out both; } @media (prefers-reduced-motion: reduce) { .admin-rise { animation: none; } }`}</style>
       <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col md:flex-row">
         <aside className="border-b border-slate-200 bg-white md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:border-r md:border-b-0">
@@ -56,7 +56,7 @@ export default function AdminDashboardPage() {
         <div className="min-w-0 flex-1">
           <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 sm:px-8 lg:px-10"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Secondary Education</p><h1 className="mt-1 text-lg font-semibold sm:text-xl">UniAllege Admin</h1></div><div className="flex items-center gap-3"><span className="hidden text-sm text-slate-600 sm:block">{admin.name}</span><span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-800">AD</span><Link href="/admin/login" onClick={logout} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold hover:bg-slate-50">Logout</Link></div></header>
           <div className="space-y-7 px-5 py-7 sm:px-8 sm:py-9 lg:px-10">
-            <section className="admin-rise"><p className="text-sm font-medium text-blue-700">School administration</p><h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Welcome, {admin.name}</h2><p className="mt-2 text-sm text-slate-500">Manage school-issued student accounts. Other administrative records are not connected yet.</p></section>
+            <section className="admin-rise relative isolate overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-blue-800 px-6 py-7 text-white shadow-[0_24px_70px_-42px_rgba(30,64,175,.6)] sm:px-8 sm:py-8"><div aria-hidden="true" className="absolute -right-20 -top-24 -z-10 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" /><p className="text-sm font-medium text-blue-200">Secondary Education · School administration</p><h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Welcome, {admin.name}</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100">Manage school-issued student accounts. Class, fee, and results records are not connected yet.</p><Link href="/admin/students" className="mt-5 inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">Manage students <span aria-hidden="true">→</span></Link></section>
 
             <section aria-label="School summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">{metrics.map((metric, index) => <article key={metric.label} className="admin-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md" style={{ animationDelay: `${index * 60}ms` }}><div className="flex items-start justify-between gap-2"><p className="text-sm font-medium text-slate-500">{metric.label}</p><span className={`flex h-9 w-9 items-center justify-center rounded-xl font-bold ${metric.tone}`}>{metric.icon}</span></div><p className="mt-4 text-2xl font-bold">{metric.value}</p><p className="mt-1 text-xs text-slate-500">{metric.note}</p></article>)}</section>
 

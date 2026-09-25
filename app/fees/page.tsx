@@ -62,7 +62,7 @@ export default function FeesPage() {
   }
 
   if (!student) {
-    return <main className="min-h-screen bg-slate-50" aria-busy="true" />;
+    return <main className="app-shell min-h-screen bg-slate-50" aria-busy="true" />;
   }
 
   const studentInitials = student.fullName
@@ -74,7 +74,7 @@ export default function FeesPage() {
     .toUpperCase();
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
+    <main className="app-shell min-h-screen bg-slate-50 text-slate-900">
       <style>{`
         @keyframes fees-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
         .fees-rise { animation: fees-rise 500ms ease-out both; }
