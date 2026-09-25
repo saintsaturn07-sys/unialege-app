@@ -21,7 +21,7 @@ export default function AdminDashboardPage() {
     const session = getAdminSession();
     if (session) {
       setAdmin(session);
-      setStudentCount(getStudents().length);
+      getStudents().then((students) => setStudentCount(students.length)).catch(() => setStudentCount(null));
     }
     else router.replace("/admin/login");
   }, [router]);
@@ -33,7 +33,7 @@ export default function AdminDashboardPage() {
   if (!admin) return <main className="app-shell min-h-screen bg-slate-50" aria-busy="true" />;
 
   const metrics = [
-    { label: "Student Accounts", value: studentCount === null ? "…" : `${studentCount} Students`, note: "Created by this administrator", icon: "◉", tone: "bg-blue-50 text-blue-700" },
+    { label: "Student Accounts", value: studentCount === null ? "Unavailable" : `${studentCount} Students`, note: studentCount === null ? "Unable to load Supabase records" : "Created by this administrator", icon: "◉", tone: "bg-blue-50 text-blue-700" },
     { label: "Classes", value: "Not available", note: "Class management coming soon", icon: "▤", tone: "bg-violet-50 text-violet-700" },
     { label: "Fee Records", value: "Not available", note: "No payment system connected", icon: "₦", tone: "bg-amber-50 text-amber-700" },
     { label: "Results", value: "Not available", note: "Results management coming soon", icon: "✓", tone: "bg-emerald-50 text-emerald-700" },

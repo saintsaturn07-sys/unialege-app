@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
     setMessageIsError(false);
@@ -26,20 +26,20 @@ export default function LoginPage() {
       return;
     }
 
-    const account = findStudentByAdmissionNumber(admissionNumber);
-    if (!account || account.password !== password || account.status !== "Active") {
-      setMessage("Invalid admission number or password. Check your credentials or contact the school administrator.");
-      setMessageIsError(true);
-      return;
-    }
-
     try {
       setIsSubmitting(true);
+      const account = await findStudentByAdmissionNumber(admissionNumber);
+      if (!account || account.password !== password || account.status !== "Active") {
+        setMessage("Invalid admission number or password. Check your credentials or contact the school administrator.");
+        setMessageIsError(true);
+        setIsSubmitting(false);
+        return;
+      }
       saveStudentSession(account);
       setIsSuccess(true);
       window.setTimeout(() => router.push("/dashboard"), 400);
-    } catch {
-      setMessage("Unable to start a session in this browser. Please check your browser storage settings.");
+    } catch (error) {
+      setMessage(error instanceof Error ? `Unable to check your login right now: ${error.message}` : "Unable to check your login right now. Please try again.");
       setMessageIsError(true);
       setIsSubmitting(false);
     }
