@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { clearStudentSession, getStudentSession, type StudentSession } from "../lib/student-store";
+import { supabase } from "../lib/supabase";
 
 const navigation = [
   { label: "Dashboard", href: "/dashboard", icon: "⌂" },
@@ -18,50 +19,7 @@ const navigation = [
 const sessions = ["2026/2027", "2025/2026"];
 const terms = ["First Term", "Second Term", "Third Term"];
 
-const subjectNames = [
-  "Mathematics",
-  "English Language",
-  "Biology",
-  "Chemistry",
-  "Physics",
-  "Economics",
-  "Government",
-  "Computer Studies",
-  "Civic Education",
-];
-
-const reportScores: Record<string, { ca: number; exam: number }[]> = {
-  "2026/2027|First Term": [
-    { ca: 24, exam: 62 }, { ca: 22, exam: 56 }, { ca: 21, exam: 53 },
-    { ca: 19, exam: 49 }, { ca: 20, exam: 51 }, { ca: 23, exam: 59 },
-    { ca: 18, exam: 47 }, { ca: 25, exam: 66 }, { ca: 22, exam: 57 },
-  ],
-  "2026/2027|Second Term": [
-    { ca: 23, exam: 58 }, { ca: 24, exam: 59 }, { ca: 20, exam: 50 },
-    { ca: 21, exam: 48 }, { ca: 19, exam: 52 }, { ca: 22, exam: 56 },
-    { ca: 20, exam: 49 }, { ca: 24, exam: 63 }, { ca: 23, exam: 58 },
-  ],
-  "2026/2027|Third Term": [
-    { ca: 25, exam: 65 }, { ca: 23, exam: 60 }, { ca: 22, exam: 56 },
-    { ca: 20, exam: 51 }, { ca: 21, exam: 54 }, { ca: 24, exam: 61 },
-    { ca: 21, exam: 50 }, { ca: 26, exam: 68 }, { ca: 24, exam: 60 },
-  ],
-  "2025/2026|First Term": [
-    { ca: 22, exam: 57 }, { ca: 21, exam: 55 }, { ca: 20, exam: 51 },
-    { ca: 18, exam: 48 }, { ca: 19, exam: 49 }, { ca: 21, exam: 56 },
-    { ca: 18, exam: 46 }, { ca: 23, exam: 62 }, { ca: 22, exam: 54 },
-  ],
-  "2025/2026|Second Term": [
-    { ca: 23, exam: 60 }, { ca: 22, exam: 58 }, { ca: 21, exam: 52 },
-    { ca: 20, exam: 50 }, { ca: 18, exam: 51 }, { ca: 22, exam: 58 },
-    { ca: 19, exam: 48 }, { ca: 24, exam: 64 }, { ca: 23, exam: 57 },
-  ],
-  "2025/2026|Third Term": [
-    { ca: 24, exam: 62 }, { ca: 23, exam: 59 }, { ca: 22, exam: 55 },
-    { ca: 19, exam: 51 }, { ca: 20, exam: 53 }, { ca: 23, exam: 60 },
-    { ca: 20, exam: 49 }, { ca: 25, exam: 66 }, { ca: 24, exam: 59 },
-  ],
-};
+type ResultRow = { id: string; subject: string; ca_score: number; exam_score: number };
 
 function gradeFor(score: number) {
   if (score >= 75) return "A";
@@ -90,6 +48,9 @@ export default function ResultsPage() {
   const [session, setSession] = useState(sessions[0]);
   const [term, setTerm] = useState(terms[0]);
   const [downloadMessage, setDownloadMessage] = useState("");
+  const [resultRows, setResultRows] = useState<ResultRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [resultsError, setResultsError] = useState("");
 
   useEffect(() => {
     const activeSession = getStudentSession();
@@ -102,15 +63,48 @@ export default function ResultsPage() {
     }
   }, [router]);
 
-  const results = useMemo(() => {
-    const scores = reportScores[`${session}|${term}`] ?? [];
-    return subjectNames.map((subject, index) => {
-      const score = scores[index] ?? { ca: 0, exam: 0 };
-      const total = score.ca + score.exam;
-      const grade = gradeFor(total);
-      return { subject, ca: score.ca, exam: score.exam, total, grade, remark: remarkFor(grade) };
-    });
-  }, [session, term]);
+  useEffect(() => {
+    if (!student) return;
+    let active = true;
+
+    async function loadResults() {
+      setLoading(true);
+      setResultsError("");
+      setResultRows([]);
+      if (!supabase) {
+        setResultsError("Results are unavailable because the database is not configured.");
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("results")
+        .select("id, subject, ca_score, exam_score")
+        .eq("student_id", student!.id)
+        .eq("session", session)
+        .eq("term", term)
+        .order("subject", { ascending: true });
+
+      if (!active) return;
+      if (error) {
+        setResultsError("We couldn’t load your results. Please try again.");
+      } else {
+        setResultRows((data ?? []) as ResultRow[]);
+      }
+      setLoading(false);
+    }
+
+    void loadResults();
+    return () => { active = false; };
+  }, [student, session, term]);
+
+  const results = resultRows.map((row) => {
+    const ca = Number(row.ca_score) || 0;
+    const exam = Number(row.exam_score) || 0;
+    const total = ca + exam;
+    const grade = gradeFor(total);
+    return { id: row.id, subject: row.subject, ca, exam, total, grade, remark: remarkFor(grade) };
+  });
 
   function handleLogout() {
     clearStudentSession();
@@ -201,7 +195,7 @@ export default function ResultsPage() {
               <div>
                 <p className="text-sm font-medium text-blue-300">Student report card</p>
                 <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">Academic Results</h2>
-                <p className="mt-2 text-sm text-slate-300">Sample report preview · official school results are not available yet.</p>
+                <p className="mt-2 text-sm text-slate-300">Your recorded subject results for the selected period.</p>
               </div>
               <dl className="grid grid-cols-2 gap-x-7 gap-y-3 rounded-2xl border border-white/15 bg-white/5 p-4 sm:grid-cols-3 lg:min-w-[570px]">
                 <div><dt className="text-xs text-slate-400">Full Name</dt><dd className="mt-1 text-sm font-semibold">{student.fullName}</dd></div>
@@ -245,10 +239,11 @@ export default function ResultsPage() {
                 </button>
               </div>
               {downloadMessage && <p role="status" className="mt-3 text-sm text-blue-700">{downloadMessage}</p>}
+              {resultsError && <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{resultsError}</p>}
 
               <div className="mt-5 grid gap-3 md:hidden">
-                {results.map((result, index) => (
-                  <article key={result.subject} className="results-rise rounded-xl border border-slate-100 p-4" style={{ animationDelay: `${index * 35}ms` }}>
+                {loading ? <p role="status" className="rounded-xl border border-slate-100 p-5 text-sm text-slate-500">Loading your results…</p> : !resultsError && results.length === 0 ? <p className="rounded-xl border border-slate-100 p-5 text-sm text-slate-500">No results have been recorded for {term} · {session} yet.</p> : results.map((result, index) => (
+                  <article key={result.id} className="results-rise rounded-xl border border-slate-100 p-4" style={{ animationDelay: `${index * 35}ms` }}>
                     <div className="flex items-start justify-between gap-3"><h3 className="font-semibold">{result.subject}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${result.grade === "F" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"}`}>{result.grade} · {result.remark}</span></div>
                     <dl className="mt-4 grid grid-cols-3 gap-2 text-sm">
                       <div><dt className="text-xs text-slate-400">CA Score</dt><dd className="mt-1 font-medium">{result.ca}/30</dd></div>
@@ -263,8 +258,8 @@ export default function ResultsPage() {
                 <table className="w-full min-w-[760px] border-collapse text-left">
                   <thead><tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400"><th scope="col" className="px-3 py-3 font-semibold">Subject</th><th scope="col" className="px-3 py-3 font-semibold">CA Score</th><th scope="col" className="px-3 py-3 font-semibold">Exam Score</th><th scope="col" className="px-3 py-3 font-semibold">Total Score</th><th scope="col" className="px-3 py-3 font-semibold">Grade</th><th scope="col" className="px-3 py-3 font-semibold">Remark</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
-                    {results.map((result, index) => (
-                      <tr key={result.subject} className="results-rise transition-colors hover:bg-slate-50" style={{ animationDelay: `${index * 35}ms` }}>
+                    {loading ? <tr><td colSpan={6} className="px-3 py-8 text-center text-sm text-slate-500">Loading your results…</td></tr> : !resultsError && results.length === 0 ? <tr><td colSpan={6} className="px-3 py-8 text-center text-sm text-slate-500">No results have been recorded for {term} · {session} yet.</td></tr> : results.map((result, index) => (
+                      <tr key={result.id} className="results-rise transition-colors hover:bg-slate-50" style={{ animationDelay: `${index * 35}ms` }}>
                         <td className="px-3 py-4 text-sm font-semibold">{result.subject}</td>
                         <td className="px-3 py-4 text-sm text-slate-600">{result.ca}/30</td>
                         <td className="px-3 py-4 text-sm text-slate-600">{result.exam}/70</td>
@@ -282,13 +277,11 @@ export default function ResultsPage() {
             <section className="grid gap-4 lg:grid-cols-2">
               <article className="results-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6" style={{ animationDelay: "230ms" }}>
                 <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700" aria-hidden="true">T</span><h2 className="text-lg font-bold">Teacher&apos;s Comment</h2></div>
-                <p className="mt-4 leading-7 text-slate-600">A hardworking student who participates well in class. Keep up the consistent effort and continue practising the topics that need more attention.</p>
-                <p className="mt-4 text-sm font-semibold text-slate-800">Class Teacher</p>
+                <p className="mt-4 leading-7 text-slate-600">Teacher comments are not available for this report.</p>
               </article>
               <article className="results-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6" style={{ animationDelay: "280ms" }}>
                 <div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-700" aria-hidden="true">P</span><h2 className="text-lg font-bold">Principal&apos;s Comment</h2></div>
-                <p className="mt-4 leading-7 text-slate-600">Good progress this term. Continue to show discipline, curiosity, and respect for others as you work toward even stronger results.</p>
-                <p className="mt-4 text-sm font-semibold text-slate-800">Principal</p>
+                <p className="mt-4 leading-7 text-slate-600">Principal comments are not available for this report.</p>
               </article>
             </section>
 

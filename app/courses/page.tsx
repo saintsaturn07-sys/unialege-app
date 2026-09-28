@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { clearStudentSession, getStudentSession, type StudentSession } from "../lib/student-store";
+import { fieldLabel, getSubjectCategories, getSubjectsForStudent, isSeniorClass, requiresTradeSubject } from "../lib/subjects";
 
 const navigation = [
   { label: "Dashboard", href: "/dashboard", icon: "⌂" },
@@ -15,25 +16,11 @@ const navigation = [
   { label: "Profile", href: "/profile", icon: "◎" },
 ];
 
-const subjects = [
-  { name: "Mathematics", code: "MTH", teacher: "Mrs. Grace Bello", periods: "Mon · Period 1, Wed · Period 3", average: 86, status: "Active", category: "Core", color: "bg-blue-600" },
-  { name: "English Language", code: "ENG", teacher: "Mr. Daniel James", periods: "Mon · Period 2, Thu · Period 1", average: 78, status: "Active", category: "Core", color: "bg-violet-600" },
-  { name: "Biology", code: "BIO", teacher: "Mrs. Ada Okafor", periods: "Tue · Period 1, Fri · Period 2", average: 74, status: "Active", category: "Science", color: "bg-emerald-600" },
-  { name: "Chemistry", code: "CHE", teacher: "Mr. Peter Eze", periods: "Tue · Period 2, Thu · Period 3", average: 68, status: "Active", category: "Science", color: "bg-amber-500" },
-  { name: "Physics", code: "PHY", teacher: "Mr. Peter Eze", periods: "Wed · Period 1, Fri · Period 1", average: 71, status: "Active", category: "Science", color: "bg-sky-600" },
-  { name: "Economics", code: "ECO", teacher: "Mrs. Mary Williams", periods: "Mon · Period 4, Thu · Period 2", average: 82, status: "Active", category: "Humanities", color: "bg-rose-500" },
-  { name: "Government", code: "GOV", teacher: "Mr. Samuel Adeyemi", periods: "Tue · Period 4, Fri · Period 3", average: 65, status: "Active", category: "Humanities", color: "bg-indigo-500" },
-  { name: "Computer Studies", code: "CST", teacher: "Mrs. Bisi Okafor", periods: "Wed · Period 4, Fri · Period 4", average: 91, status: "Active", category: "Technology", color: "bg-teal-600" },
-  { name: "Civic Education", code: "CVE", teacher: "Mr. Samuel Adeyemi", periods: "Thu · Period 4", average: 79, status: "Active", category: "Humanities", color: "bg-orange-500" },
-];
-
-const categories = ["All Subjects", "Core", "Science", "Humanities", "Technology"];
-
 export default function SubjectsPage() {
   const router = useRouter();
   const [student, setStudent] = useState<StudentSession | null>(null);
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState(categories[0]);
+  const [category, setCategory] = useState("All Subjects");
 
   useEffect(() => {
     const session = getStudentSession();
@@ -44,17 +31,19 @@ export default function SubjectsPage() {
     }
   }, [router]);
 
+  const subjects = student ? getSubjectsForStudent(student.className, student.fieldOfStudy, student.tradeSubject) : [];
+  const categories = getSubjectCategories(subjects);
   const filteredSubjects = useMemo(() => {
     const query = search.trim().toLowerCase();
     return subjects.filter((subject) => {
       const matchesQuery =
         subject.name.toLowerCase().includes(query) ||
         subject.code.toLowerCase().includes(query) ||
-        subject.teacher.toLowerCase().includes(query);
+        subject.category.toLowerCase().includes(query);
       const matchesCategory = category === "All Subjects" || subject.category === category;
       return matchesQuery && matchesCategory;
     });
-  }, [search, category]);
+  }, [search, category, subjects]);
 
   if (!student) {
     return <main className="app-shell min-h-screen bg-slate-50" aria-busy="true" />;
@@ -131,13 +120,14 @@ export default function SubjectsPage() {
           <div className="space-y-7 px-5 py-7 sm:px-8 sm:py-9 lg:px-10">
             <section className="subjects-rise flex flex-col justify-between gap-5 rounded-3xl bg-slate-950 px-6 py-7 text-white shadow-sm sm:px-8 sm:py-8 lg:flex-row lg:items-end">
               <div>
-                <p className="text-sm font-medium text-blue-300">Sample preview · Class learning</p>
+                <p className="text-sm font-medium text-blue-300">Class learning · {fieldLabel(student.fieldOfStudy)}</p>
                 <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">Hello, {student.fullName}</h2>
-                <p className="mt-2 text-sm text-slate-300">Sample subject preview. Official class records are not available yet.</p>
+                <p className="mt-2 text-sm text-slate-300">Subjects shown are based on your class and field of study.</p>
               </div>
               <dl className="grid grid-cols-2 gap-x-7 gap-y-3 rounded-2xl border border-white/15 bg-white/5 p-4 sm:grid-cols-4 lg:min-w-[520px]">
                 <div><dt className="text-xs text-slate-400">Admission Number</dt><dd className="mt-1 text-sm font-semibold">{student.admissionNumber}</dd></div>
                 <div><dt className="text-xs text-slate-400">Class</dt><dd className="mt-1 text-sm font-semibold">{student.className}</dd></div>
+                {student.className.toUpperCase().startsWith("SS") && <div><dt className="text-xs text-slate-400">Field</dt><dd className="mt-1 text-sm font-semibold">{fieldLabel(student.fieldOfStudy)}</dd></div>}
                 <div><dt className="text-xs text-slate-400">Session</dt><dd className="mt-1 text-sm font-semibold">{student.session}</dd></div>
                 <div><dt className="text-xs text-slate-400">Term</dt><dd className="mt-1 text-sm font-semibold">{student.term}</dd></div>
               </dl>
@@ -160,7 +150,7 @@ export default function SubjectsPage() {
               <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
                 <div>
                   <h2 className="text-lg font-bold">Subject list</h2>
-                  <p className="mt-1 text-sm text-slate-500">Explore your current subjects and class schedule.</p>
+                  <p className="mt-1 text-sm text-slate-500">Browse subjects offered for your class and field.</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:w-[520px]">
                   <label className="relative block">
@@ -198,17 +188,15 @@ export default function SubjectsPage() {
                           <p className="mt-1 text-xs text-slate-500">{subject.category}</p>
                         </div>
                       </div>
-                      <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{subject.status}</span>
+                      <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Offered</span>
                     </div>
                     <dl className="mt-5 space-y-2 border-t border-slate-100 pt-4 text-sm">
-                      <div className="flex justify-between gap-3"><dt className="text-slate-500">Teacher</dt><dd className="text-right font-medium">{subject.teacher}</dd></div>
-                      <div className="flex justify-between gap-3"><dt className="text-slate-500">Class periods</dt><dd className="text-right font-medium">{subject.periods}</dd></div>
-                      <div className="flex justify-between gap-3"><dt className="text-slate-500">Current average</dt><dd className="font-semibold text-slate-800">{subject.average}%</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-slate-500">Class</dt><dd className="text-right font-medium">{student.className}</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-slate-500">Subject group</dt><dd className="text-right font-medium">{subject.category}</dd></div>
                     </dl>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${subject.color}`} style={{ width: `${subject.average}%` }} /></div>
                   </article>
                 ))}
-                {filteredSubjects.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-10 text-center text-sm text-slate-500 sm:col-span-2 xl:col-span-3">No subjects match your search and filter.</p>}
+                {filteredSubjects.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-10 text-center text-sm text-slate-500 sm:col-span-2 xl:col-span-3">{(isSeniorClass(student.className) && !student.fieldOfStudy) || (requiresTradeSubject(student.className) && !student.tradeSubject) ? "Your subject profile is incomplete. Please contact the school administrator to assign your field (if applicable) and trade subject." : "No subjects match your search and filter."}</p>}
               </div>
               <p className="mt-5 text-xs text-slate-400">Showing {filteredSubjects.length} of {subjects.length} subjects</p>
             </section>

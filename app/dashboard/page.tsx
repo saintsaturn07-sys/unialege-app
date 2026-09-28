@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { clearStudentSession, getStudentSession, type StudentSession } from "../lib/student-store";
+import { fieldLabel, getSubjectsForStudent, isSeniorClass, requiresTradeSubject } from "../lib/subjects";
 
 const navigation = [
   { label: "Dashboard", href: "#dashboard", icon: "⌂" },
@@ -13,23 +14,6 @@ const navigation = [
   { label: "Timetable", href: "/timetable", icon: "◷" },
   { label: "Announcements", href: "/announcements", icon: "◉" },
   { label: "Profile", href: "/profile", icon: "◎" },
-];
-
-const subjects = [
-  { name: "Mathematics", score: 86, color: "bg-blue-600" },
-  { name: "English Language", score: 78, color: "bg-violet-600" },
-  { name: "Biology", score: 74, color: "bg-emerald-600" },
-  { name: "Chemistry", score: 68, color: "bg-amber-500" },
-  { name: "Physics", score: 71, color: "bg-sky-600" },
-  { name: "Economics", score: 82, color: "bg-rose-500" },
-  { name: "Government", score: 65, color: "bg-indigo-500" },
-  { name: "Computer Studies", score: 91, color: "bg-teal-600" },
-];
-
-const recentResults = [
-  { subject: "Mathematics", assessment: "Continuous Assessment 2", score: 86, grade: "A" },
-  { subject: "English Language", assessment: "Essay Writing", score: 78, grade: "B" },
-  { subject: "Biology", assessment: "Practical Test", score: 74, grade: "B" },
 ];
 
 const announcements = [
@@ -81,13 +65,11 @@ export default function DashboardPage() {
     .map((part) => part[0])
     .join("")
     .toUpperCase();
-  const overallAverage = Math.round(
-    subjects.reduce((sum, subject) => sum + subject.score, 0) / subjects.length,
-  );
+  const subjects = getSubjectsForStudent(student.className, student.fieldOfStudy, student.tradeSubject);
 
   const overview = [
     { label: "Current Class", value: student.className, note: "Current class", icon: "▤", tone: "bg-blue-50 text-blue-700" },
-    { label: "Overall Average", value: `${overallAverage}%`, note: "Sample preview · not an official result", icon: "✦", tone: "bg-violet-50 text-violet-700" },
+    { label: "Overall Average", value: "Not available", note: "No grade average is calculated yet", icon: "✦", tone: "bg-violet-50 text-violet-700" },
     { label: "Attendance", value: "Not available", note: "No attendance records yet", icon: "✓", tone: "bg-emerald-50 text-emerald-700" },
     { label: "Position in Class", value: "Not available", note: "Not available yet", icon: "↗", tone: "bg-amber-50 text-amber-700" },
   ];
@@ -179,22 +161,20 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-bold">My Subjects</h2>
-                  <p className="mt-1 text-sm text-slate-500">Sample preview data · official school records are not available yet</p>
+                  <p className="mt-1 text-sm text-slate-500">Subjects assigned for {student.className}{student.className.toUpperCase().startsWith("SS") ? ` · ${fieldLabel(student.fieldOfStudy)}` : ""}</p>
                 </div>
-                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">8 subjects</span>
+                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{subjects.length} subjects</span>
               </div>
               <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {subjects.map((subject, index) => (
                   <article key={subject.name} className="dashboard-rise rounded-xl border border-slate-100 p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-sm" style={{ animationDelay: `${index * 45}ms` }}>
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="text-sm font-semibold">{subject.name}</h3>
-                      <span className="text-sm font-bold text-slate-700">{subject.score}%</span>
-                    </div>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                      <div className={`h-full rounded-full ${subject.color}`} style={{ width: `${subject.score}%` }} />
+                      <span className="text-xs font-medium text-slate-500">{subject.category}</span>
                     </div>
                   </article>
                 ))}
+                {subjects.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500 sm:col-span-2 xl:col-span-4">{(isSeniorClass(student.className) && !student.fieldOfStudy) || (requiresTradeSubject(student.className) && !student.tradeSubject) ? "Your subject profile is incomplete. Please contact the school administrator to assign your field (if applicable) and trade subject." : "No subjects are configured for this class."}</p>}
               </div>
             </section>
 
@@ -203,25 +183,11 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-lg font-bold">Recent Results</h2>
-                    <p className="mt-1 text-sm text-slate-500">Sample marks for preview · official results are not available yet</p>
+                    <p className="mt-1 text-sm text-slate-500">Your recorded results for this term</p>
                   </div>
                   <span className="text-sm font-semibold text-blue-700">{student.term}</span>
                 </div>
-                <div className="mt-5 overflow-x-auto">
-                  <table className="w-full min-w-[440px] text-left">
-                    <thead><tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400"><th className="px-2 py-3 font-semibold">Subject</th><th className="px-2 py-3 font-semibold">Assessment</th><th className="px-2 py-3 font-semibold">Score</th><th className="px-2 py-3 font-semibold">Grade</th></tr></thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {recentResults.map((result) => (
-                        <tr key={result.subject} className="text-sm">
-                          <td className="px-2 py-3 font-medium">{result.subject}</td>
-                          <td className="px-2 py-3 text-slate-500">{result.assessment}</td>
-                          <td className="px-2 py-3 font-semibold">{result.score}%</td>
-                          <td className="px-2 py-3"><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{result.grade}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Link href="/results" className="mt-5 block rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-blue-700 hover:bg-blue-50">Open Academic Results to view your recorded scores.</Link>
               </section>
 
               <section id="upcoming" className="dashboard-rise min-w-0 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6" style={{ animationDelay: "170ms" }}>

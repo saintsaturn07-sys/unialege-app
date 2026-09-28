@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { requiresTradeSubject, isSeniorClass, type SeniorField, tradeSubjects } from "./subjects";
 
 export type StudentRecord = {
   id: string;
@@ -12,10 +13,12 @@ export type StudentRecord = {
   parentGuardianPhone: string;
   createdAt: string;
   status: "Active" | "Inactive";
+  fieldOfStudy?: SeniorField | null;
+  tradeSubject?: string | null;
 };
 
 export type StudentInput = Omit<StudentRecord, "id" | "createdAt" | "status">;
-export type StudentSession = Pick<StudentRecord, "id" | "fullName" | "admissionNumber" | "className" | "session" | "term" | "parentGuardianName" | "parentGuardianPhone">;
+export type StudentSession = Pick<StudentRecord, "id" | "fullName" | "admissionNumber" | "className" | "session" | "term" | "parentGuardianName" | "parentGuardianPhone" | "fieldOfStudy" | "tradeSubject">;
 
 export type StoreResult =
   | { ok: true; student: StudentRecord }
@@ -30,6 +33,8 @@ type StudentRow = {
   class_name: string;
   session: string;
   term: string;
+  field_of_study?: SeniorField | null;
+  trade_subject?: string | null;
 };
 
 const STUDENTS_KEY = "unialege-students-v1";
@@ -99,6 +104,8 @@ function fromRow(row: StudentRow): StudentRecord {
     admissionNumber: normalizeAdmissionNumber(row.admission_number),
     password: row.password,
     className: row.class_name,
+    fieldOfStudy: row.field_of_study ?? null,
+    tradeSubject: row.trade_subject ?? null,
     session: row.session,
     term: row.term,
     parentGuardianName: extra?.parentGuardianName ?? "",
@@ -115,15 +122,20 @@ function toRowInput(input: StudentInput) {
     class_name: input.className.trim(),
     session: input.session.trim(),
     term: input.term.trim(),
+    field_of_study: input.fieldOfStudy ?? null,
+    trade_subject: input.tradeSubject ?? null,
   };
 }
 
 function validInput(input: StudentInput) {
-  return Boolean(input.fullName.trim() && normalizeAdmissionNumber(input.admissionNumber) && input.password && input.className.trim() && input.session.trim() && input.term.trim() && input.parentGuardianName.trim() && input.parentGuardianPhone.trim());
+  const hasRequiredSeniorFields = !isSeniorClass(input.className) || Boolean(input.fieldOfStudy);
+  const hasValidTrade = !requiresTradeSubject(input.className) || tradeSubjects.includes(input.tradeSubject ?? "");
+  return Boolean(input.fullName.trim() && normalizeAdmissionNumber(input.admissionNumber) && input.password && input.className.trim() && input.session.trim() && input.term.trim() && input.parentGuardianName.trim() && input.parentGuardianPhone.trim() && hasRequiredSeniorFields && hasValidTrade);
 }
 
 function cleanInput(input: StudentInput): StudentInput {
-  return { ...input, fullName: input.fullName.trim(), admissionNumber: normalizeAdmissionNumber(input.admissionNumber), className: input.className.trim(), session: input.session.trim(), term: input.term.trim(), parentGuardianName: input.parentGuardianName.trim(), parentGuardianPhone: input.parentGuardianPhone.trim() };
+  const className = input.className.trim();
+  return { ...input, fullName: input.fullName.trim(), admissionNumber: normalizeAdmissionNumber(input.admissionNumber), className, session: input.session.trim(), term: input.term.trim(), parentGuardianName: input.parentGuardianName.trim(), parentGuardianPhone: input.parentGuardianPhone.trim(), fieldOfStudy: isSeniorClass(className) ? input.fieldOfStudy ?? null : null, tradeSubject: requiresTradeSubject(className) ? input.tradeSubject ?? null : null };
 }
 
 function databaseError(message: string): StoreResult {
@@ -214,8 +226,8 @@ function readStudentSessionId(): string | null {
 }
 
 export function saveStudentSession(student: StudentRecord) {
-  const { id, fullName, admissionNumber, className, session, term, parentGuardianName, parentGuardianPhone } = student;
-  window.localStorage.setItem(STUDENT_SESSION_KEY, JSON.stringify({ id, fullName, admissionNumber, className, session, term, parentGuardianName, parentGuardianPhone } satisfies StudentSession));
+  const { id, fullName, admissionNumber, className, session, term, parentGuardianName, parentGuardianPhone, fieldOfStudy, tradeSubject } = student;
+  window.localStorage.setItem(STUDENT_SESSION_KEY, JSON.stringify({ id, fullName, admissionNumber, className, session, term, parentGuardianName, parentGuardianPhone, fieldOfStudy, tradeSubject } satisfies StudentSession));
 }
 
 export function getStudentSession(): StudentSession | null {
@@ -223,7 +235,7 @@ export function getStudentSession(): StudentSession | null {
     const parsed: unknown = JSON.parse(window.localStorage.getItem(STUDENT_SESSION_KEY) ?? "null");
     if (typeof parsed === "object" && parsed !== null && "fullName" in parsed && "admissionNumber" in parsed && "id" in parsed && typeof parsed.fullName === "string" && typeof parsed.admissionNumber === "string" && typeof parsed.id === "string") {
       const snapshot = parsed as Record<string, unknown>;
-      return { id: snapshot.id as string, fullName: snapshot.fullName as string, admissionNumber: snapshot.admissionNumber as string, className: typeof snapshot.className === "string" ? snapshot.className : "", session: typeof snapshot.session === "string" ? snapshot.session : "", term: typeof snapshot.term === "string" ? snapshot.term : "", parentGuardianName: typeof snapshot.parentGuardianName === "string" ? snapshot.parentGuardianName : "", parentGuardianPhone: typeof snapshot.parentGuardianPhone === "string" ? snapshot.parentGuardianPhone : "" };
+      return { id: snapshot.id as string, fullName: snapshot.fullName as string, admissionNumber: snapshot.admissionNumber as string, className: typeof snapshot.className === "string" ? snapshot.className : "", session: typeof snapshot.session === "string" ? snapshot.session : "", term: typeof snapshot.term === "string" ? snapshot.term : "", parentGuardianName: typeof snapshot.parentGuardianName === "string" ? snapshot.parentGuardianName : "", parentGuardianPhone: typeof snapshot.parentGuardianPhone === "string" ? snapshot.parentGuardianPhone : "", fieldOfStudy: snapshot.fieldOfStudy === "science" || snapshot.fieldOfStudy === "commercial" || snapshot.fieldOfStudy === "art" ? snapshot.fieldOfStudy : null, tradeSubject: typeof snapshot.tradeSubject === "string" ? snapshot.tradeSubject : null };
     }
     // Migrate the earlier id-only browser session while local fallback data exists.
     const id = readStudentSessionId();
