@@ -9,6 +9,7 @@ import { fieldLabel, getSubjectsForStudent, isSeniorClass, requiresTradeSubject 
 const navigation = [
   { label: "Dashboard", href: "#dashboard", icon: "⌂" },
   { label: "My Subjects", href: "/courses", icon: "▤" },
+  { label: "CBT / Exams", href: "/cbt", icon: "✓" },
   { label: "Results", href: "/results", icon: "▥" },
   { label: "Fees", href: "/fees", icon: "＄" },
   { label: "Timetable", href: "/timetable", icon: "◷" },

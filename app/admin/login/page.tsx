@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { saveAdminSession, type AdminSession } from "../../lib/admin-auth";
+import { saveAdminSession, verifyAdminSession } from "../../lib/admin-auth";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -22,6 +22,7 @@ export default function AdminLoginPage() {
     try {
       const response = await fetch("/api/admin/demo-login", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
         body: JSON.stringify({ username, password }),
@@ -33,7 +34,12 @@ export default function AdminLoginPage() {
         return;
       }
 
-      const session = (await response.json()) as AdminSession;
+      const session = await verifyAdminSession();
+      if (!session) {
+        setError("Sign-in was accepted, but the secure administrator session could not be verified. Please try again.");
+        setIsSubmitting(false);
+        return;
+      }
       saveAdminSession(session);
       setIsSuccess(true);
       window.setTimeout(() => router.replace("/admin"), 450);
@@ -109,7 +115,7 @@ export default function AdminLoginPage() {
             </button>
           </form>
 
-          <div className="mt-7 flex items-center gap-3 text-xs leading-5 text-slate-400"><span className="h-px flex-1 bg-white/10" /><span>Temporary demo access · not production authentication</span><span className="h-px flex-1 bg-white/10" /></div>
+          <div className="mt-7 flex items-center gap-3 text-xs leading-5 text-slate-400"><span className="h-px flex-1 bg-white/10" /><span>Secure administrator sign-in</span><span className="h-px flex-1 bg-white/10" /></div>
           <p className="mt-6 text-center text-sm text-slate-400"><Link href="/" className="rounded underline decoration-white/20 underline-offset-4 transition hover:text-white hover:decoration-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">Return to UniAllege</Link></p>
         </section>
       </div>

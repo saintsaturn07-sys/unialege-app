@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { findStudentByAdmissionNumber, saveStudentSession } from "../lib/student-store";
+import { saveStudentSession, type StudentSession } from "../lib/student-store";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,14 +28,21 @@ export default function LoginPage() {
 
     try {
       setIsSubmitting(true);
-      const account = await findStudentByAdmissionNumber(admissionNumber);
-      if (!account || account.password !== password || account.status !== "Active") {
-        setMessage("Invalid admission number or password. Check your credentials or contact the school administrator.");
+      const response = await fetch("/api/student/login", {
+        method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store",
+        body: JSON.stringify({ admissionNumber, password }),
+      });
+      const result = await response.json() as { student?: StudentSession; error?: string };
+      if (!response.ok || !result.student) {
+        setMessage(result.error ?? "Invalid admission number or password. Check your credentials or contact the school administrator.");
         setMessageIsError(true);
         setIsSubmitting(false);
         return;
       }
-      saveStudentSession(account);
+      window.localStorage.removeItem("unialege-students-v1");
+      window.localStorage.removeItem("unialege-demo-account");
+      window.localStorage.removeItem("unialege-demo-session");
+      saveStudentSession(result.student);
       setIsSuccess(true);
       window.setTimeout(() => router.push("/dashboard"), 400);
     } catch (error) {

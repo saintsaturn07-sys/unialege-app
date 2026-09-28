@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { clearAdminSession, getAdminSession, type AdminSession } from "../../lib/admin-auth";
+import { clearAdminSession, verifyAdminSession, type AdminSession } from "../../lib/admin-auth";
 import { addStudent, deleteStudent as deleteStudentRecord, getStudents, normalizeAdmissionNumber, updateStudent, type StudentInput, type StudentRecord } from "../../lib/student-store";
 import { fieldLabel, isSeniorClass, requiresTradeSubject, tradeSubjects, type SeniorField } from "../../lib/subjects";
 
@@ -42,15 +42,16 @@ export default function AdminStudentsPage() {
   const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
-    const session = getAdminSession();
-    if (!session) {
-      router.replace("/admin/login");
-      return;
-    }
-    setAdmin(session);
-    getStudents().then(setStudents).catch((error: unknown) => {
-      setLoadError(error instanceof Error ? `Unable to load student records: ${error.message}` : "Unable to load student records. Check the Supabase connection and access policies.");
-    }).finally(() => setIsLoading(false));
+    let active = true;
+    void verifyAdminSession().then((session) => {
+      if (!active) return;
+      if (!session) { router.replace("/admin/login"); return; }
+      setAdmin(session);
+      getStudents().then((data) => { if (active) setStudents(data); }).catch((error: unknown) => {
+        if (active) setLoadError(error instanceof Error ? `Unable to load student records: ${error.message}` : "Unable to load student records. Check the Supabase connection and access policies.");
+      }).finally(() => { if (active) setIsLoading(false); });
+    });
+    return () => { active = false; };
   }, [router]);
 
   const visibleStudents = useMemo(() => {
@@ -75,7 +76,7 @@ export default function AdminStudentsPage() {
     setForm({
       fullName: student.fullName,
       admissionNumber: student.admissionNumber,
-      password: student.password,
+      password: "",
       className: student.className,
       session: student.session,
       term: student.term,
@@ -172,7 +173,7 @@ export default function AdminStudentsPage() {
         {modal === "view" && selectedStudent ? <div className="mt-6 grid gap-4 sm:grid-cols-2">{[["Full Name", selectedStudent.fullName], ["Admission Number", selectedStudent.admissionNumber], ["Class", selectedStudent.className], ...(isSeniorClass(selectedStudent.className) ? [["Field of Study", fieldLabel(selectedStudent.fieldOfStudy)]] : []), ...(requiresTradeSubject(selectedStudent.className) ? [["Trade Subject", selectedStudent.tradeSubject ?? "Not selected"]] : []), ["Session", selectedStudent.session], ["Term", selectedStudent.term], ["Parent/Guardian", selectedStudent.parentGuardianName], ["Guardian Phone", selectedStudent.parentGuardianPhone], ["Status", selectedStudent.status]].map(([label, value]) => <div key={label} className="rounded-xl bg-slate-50 p-4"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 font-semibold">{value}</p></div>)}<p className="sm:col-span-2 text-xs text-slate-400">Credentials are issued by the school administrator. Passwords are never shown in student details.</p></div> : <form onSubmit={handleSave} className="mt-6"><div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">The school administrator creates and issues the student&apos;s Admission Number and Password.</div><div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-medium">Full Name<input required autoComplete="name" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} placeholder="Student full name" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>
           <label className="text-sm font-medium">Admission Number<input required value={form.admissionNumber} onChange={(event) => setForm({ ...form, admissionNumber: normalizeAdmissionNumber(event.target.value) })} placeholder="e.g. AD/2026/1050" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>
-          <label className="text-sm font-medium">Password<input required type="password" autoComplete="new-password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Set initial password" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>
+          <label className="text-sm font-medium">Password<input required={modal === "add"} type="password" autoComplete="new-password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder={modal === "edit" ? "Leave blank to keep the current password" : "Set initial password"} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></label>
           <label className="text-sm font-medium">Class<select value={form.className} onChange={(event) => setForm({ ...form, className: event.target.value, fieldOfStudy: null, tradeSubject: null })} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">{classes.slice(1).map((className) => <option key={className}>{className}</option>)}</select></label>
           {isSeniorClass(form.className) && <label className="text-sm font-medium">Field of Study<select required value={form.fieldOfStudy ?? ""} onChange={(event) => setForm({ ...form, fieldOfStudy: (event.target.value || null) as SeniorField | null })} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"><option value="">Select a field</option><option value="science">Science</option><option value="commercial">Commercial / Business</option><option value="art">Art / Humanities</option></select></label>}
           {requiresTradeSubject(form.className) && <label className="text-sm font-medium">One Trade Subject<select required value={form.tradeSubject ?? ""} onChange={(event) => setForm({ ...form, tradeSubject: event.target.value || null })} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"><option value="">Select one trade subject</option>{tradeSubjects.map((subject) => <option key={subject}>{subject}</option>)}</select></label>}

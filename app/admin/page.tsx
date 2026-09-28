@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { clearAdminSession, getAdminSession, type AdminSession } from "../lib/admin-auth";
+import { clearAdminSession, verifyAdminSession, type AdminSession } from "../lib/admin-auth";
 import { getStudents } from "../lib/student-store";
 
 const navigation = [
   { label: "Dashboard", href: "/admin", icon: "▤" },
   { label: "Students", href: "/admin/students", icon: "◉" },
+  { label: "CBT Exams", href: "/admin/exams", icon: "✓" },
 ];
 
 export default function AdminDashboardPage() {
@@ -18,12 +19,14 @@ export default function AdminDashboardPage() {
   const [studentCount, setStudentCount] = useState<number | null>(null);
 
   useEffect(() => {
-    const session = getAdminSession();
-    if (session) {
+    let active = true;
+    void verifyAdminSession().then((session) => {
+      if (!active) return;
+      if (!session) { router.replace("/admin/login"); return; }
       setAdmin(session);
       getStudents().then((students) => setStudentCount(students.length)).catch(() => setStudentCount(null));
-    }
-    else router.replace("/admin/login");
+    });
+    return () => { active = false; };
   }, [router]);
 
   function logout() {
@@ -62,7 +65,7 @@ export default function AdminDashboardPage() {
 
             <div className="grid gap-7 xl:grid-cols-[1.2fr_1fr]">
               <section className="admin-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6"><div><h2 className="text-lg font-bold">Recent Activity</h2><p className="mt-1 text-sm text-slate-500">Latest updates from the school portal</p></div><p className="mt-5 rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Activity tracking is not available yet.</p></section>
-              <section className="admin-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6"><div><h2 className="text-lg font-bold">Quick Actions</h2><p className="mt-1 text-sm text-slate-500">Common administration tasks</p></div><div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"><Link href="/admin/students" className="rounded-xl bg-blue-700 px-4 py-4 text-sm font-semibold text-white transition hover:bg-blue-800">＋ Add Student</Link><Link href="/admin/results" className="rounded-xl border border-slate-200 px-4 py-4 text-left text-sm font-semibold transition hover:bg-slate-50">✓ Enter Results</Link><button type="button" onClick={() => setActionMessage("Payment recording is coming soon.")} className="rounded-xl border border-slate-200 px-4 py-4 text-left text-sm font-semibold transition hover:bg-slate-50">₦ Record Payment</button><button type="button" onClick={() => setActionMessage("Announcement publishing is coming soon.")} className="rounded-xl border border-slate-200 px-4 py-4 text-left text-sm font-semibold transition hover:bg-slate-50">◉ Publish Announcement</button></div>{actionMessage && <p role="status" className="mt-4 text-sm font-medium text-blue-700">{actionMessage}</p>}<p className="mt-4 text-xs text-slate-400">More management tools are coming as the admin portal grows.</p></section>
+              <section className="admin-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6"><div><h2 className="text-lg font-bold">Quick Actions</h2><p className="mt-1 text-sm text-slate-500">Common administration tasks</p></div><div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2"><Link href="/admin/students" className="rounded-xl bg-blue-700 px-4 py-4 text-sm font-semibold text-white transition hover:bg-blue-800">＋ Add Student</Link><Link href="/admin/results" className="rounded-xl border border-slate-200 px-4 py-4 text-left text-sm font-semibold transition hover:bg-slate-50">✓ Enter Results</Link><Link href="/admin/exams" className="rounded-xl border border-slate-200 px-4 py-4 text-left text-sm font-semibold transition hover:bg-slate-50">✓ Manage CBT Exams</Link><button type="button" onClick={() => setActionMessage("Payment recording is coming soon.")} className="rounded-xl border border-slate-200 px-4 py-4 text-left text-sm font-semibold transition hover:bg-slate-50">₦ Record Payment</button><button type="button" onClick={() => setActionMessage("Announcement publishing is coming soon.")} className="rounded-xl border border-slate-200 px-4 py-4 text-left text-sm font-semibold transition hover:bg-slate-50">◉ Publish Announcement</button></div>{actionMessage && <p role="status" className="mt-4 text-sm font-medium text-blue-700">{actionMessage}</p>}<p className="mt-4 text-xs text-slate-400">More management tools are coming as the admin portal grows.</p></section>
             </div>
             <footer className="pb-2 text-center text-xs text-slate-400">© 2026 Unialege · Admin Portal</footer>
           </div>

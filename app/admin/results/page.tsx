@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { clearAdminSession, getAdminSession, type AdminSession } from "../../lib/admin-auth";
+import { clearAdminSession, verifyAdminSession, type AdminSession } from "../../lib/admin-auth";
 import { getStudents, type StudentRecord } from "../../lib/student-store";
-import { supabase } from "../../lib/supabase";
 import { getSubjectsForStudent, isSeniorClass, requiresTradeSubject } from "../../lib/subjects";
 
 type ResultRow = { id: string; student_id: string; subject: string; ca_score: number; exam_score: number; session: string; term: string };
@@ -29,25 +28,32 @@ export default function AdminResultsPage() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    const session = getAdminSession();
-    if (!session) { router.replace("/admin/login"); return; }
-    setAdmin(session);
-    getStudents().then((data) => {
-      setStudents(data);
-      setStudentId(data[0]?.id ?? "");
-      if (data[0]) setForm((current) => ({ ...current, session: data[0].session || current.session, term: data[0].term || current.term }));
-    }).catch((reason: unknown) => setError(reason instanceof Error ? `Unable to load students: ${reason.message}` : "Unable to load students."))
-      .finally(() => setLoadingStudents(false));
+    let active = true;
+    void verifyAdminSession().then((session) => {
+      if (!active) return;
+      if (!session) { router.replace("/admin/login"); return; }
+      setAdmin(session);
+      getStudents().then((data) => {
+        if (!active) return;
+        setStudents(data);
+        setStudentId(data[0]?.id ?? "");
+        if (data[0]) setForm((current) => ({ ...current, session: data[0].session || current.session, term: data[0].term || current.term }));
+      }).catch((reason: unknown) => { if (active) setError(reason instanceof Error ? `Unable to load students: ${reason.message}` : "Unable to load students."); })
+        .finally(() => { if (active) setLoadingStudents(false); });
+    });
+    return () => { active = false; };
   }, [router]);
 
   const loadResults = useCallback(async (id: string) => {
     if (!id) { setRows([]); return; }
-    if (!supabase) { setError("Supabase is not configured."); return; }
     setLoadingResults(true);
     setError("");
-    const { data, error: queryError } = await supabase.from("results").select("id, student_id, subject, ca_score, exam_score, session, term").eq("student_id", id).order("session", { ascending: false }).order("term", { ascending: true }).order("subject", { ascending: true });
-    if (queryError) setError(`Unable to load results: ${queryError.message}`);
-    else setRows((data ?? []) as ResultRow[]);
+    try {
+      const response = await fetch(`/api/admin/results?studentId=${encodeURIComponent(id)}`, { cache: "no-store" });
+      const body = await response.json() as { results?: ResultRow[]; error?: string };
+      if (!response.ok) setError(`Unable to load results: ${body.error ?? "Please try again."}`);
+      else setRows(body.results ?? []);
+    } catch { setError("Unable to load results. Please try again."); }
     setLoadingResults(false);
   }, []);
 
@@ -74,15 +80,14 @@ export default function AdminResultsPage() {
     if (!form.exam.trim() || !Number.isFinite(exam) || exam < 0 || exam > 70) { setError("Exam score must be a number from 0 to 70."); return; }
     if (!form.subject.trim() || !form.session.trim() || !form.term) { setError("Enter a subject, session, and term."); return; }
     if (!allowedSubjects.some((subject) => subject.name === form.subject)) { setError("Choose a subject offered for this student’s class and field."); return; }
-    if (!supabase) { setError("Supabase is not configured."); return; }
     setSaving(true);
     const record = { student_id: studentId, subject: form.subject.trim(), ca_score: ca, exam_score: exam, session: form.session.trim(), term: form.term };
-    const response = editingId
-      ? await supabase.from("results").update(record).eq("id", editingId).eq("student_id", studentId).select("id").maybeSingle()
-      : await supabase.from("results").insert(record).select("id").single();
+    let response: Response;
+    try { response = await fetch("/api/admin/results", { method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store", body: JSON.stringify({ ...record, id: editingId || undefined }) }); }
+    catch { setSaving(false); setError("Unable to save result. Please try again."); return; }
+    const result = await response.json().catch(() => ({})) as { id?: string; error?: string };
     setSaving(false);
-    if (response.error) { setError(`Unable to save result: ${response.error.message}`); return; }
-    if (editingId && !response.data) { setError("This result could not be found. Reload and try again."); return; }
+    if (!response.ok) { setError(`Unable to save result: ${result.error ?? "Please try again."}`); return; }
     setSuccess(editingId ? "Result updated successfully." : "Result saved successfully.");
     setEditingId(""); setForm((current) => ({ ...blankForm, session: current.session, term: current.term }));
     await loadResults(studentId);
@@ -91,12 +96,13 @@ export default function AdminResultsPage() {
   async function deleteResult(row: ResultRow) {
     const student = students.find((item) => item.id === studentId);
     if (!window.confirm(`Delete ${row.subject} for ${student?.fullName ?? "this student"}?`)) return;
-    if (!supabase) { setError("Supabase is not configured."); return; }
     setError(""); setSuccess("");
-    const { data, error: deleteError } = await supabase.from("results").delete().eq("id", row.id).eq("student_id", studentId).select("id").maybeSingle();
-    if (deleteError) setError(`Unable to delete result: ${deleteError.message}`);
-    else if (!data) setError("This result could not be found. Reload and try again.");
-    else { setSuccess("Result deleted successfully."); if (editingId === row.id) { setEditingId(""); setForm(blankForm); } await loadResults(studentId); }
+    try {
+      const response = await fetch(`/api/admin/results/${row.id}?studentId=${encodeURIComponent(studentId)}`, { method: "DELETE", cache: "no-store" });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) setError(`Unable to delete result: ${result.error ?? "Please try again."}`);
+      else { setSuccess("Result deleted successfully."); if (editingId === row.id) { setEditingId(""); setForm(blankForm); } await loadResults(studentId); }
+    } catch { setError("Unable to delete result. Please try again."); }
   }
 
   function logout() { clearAdminSession(); }

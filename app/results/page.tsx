@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { clearStudentSession, getStudentSession, type StudentSession } from "../lib/student-store";
-import { supabase } from "../lib/supabase";
 
 const navigation = [
   { label: "Dashboard", href: "/dashboard", icon: "⌂" },
@@ -71,25 +70,15 @@ export default function ResultsPage() {
       setLoading(true);
       setResultsError("");
       setResultRows([]);
-      if (!supabase) {
-        setResultsError("Results are unavailable because the database is not configured.");
-        setLoading(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("results")
-        .select("id, subject, ca_score, exam_score")
-        .eq("student_id", student!.id)
-        .eq("session", session)
-        .eq("term", term)
-        .order("subject", { ascending: true });
-
+      let response: Response;
+      try { response = await fetch(`/api/student/results?session=${encodeURIComponent(session)}&term=${encodeURIComponent(term)}`, { cache: "no-store" }); }
+      catch { if (active) { setResultsError("We couldn't load your results. Please try again."); setLoading(false); } return; }
+      const result = await response.json().catch(() => ({})) as { results?: ResultRow[] };
       if (!active) return;
-      if (error) {
+      if (!response.ok) {
         setResultsError("We couldn’t load your results. Please try again.");
       } else {
-        setResultRows((data ?? []) as ResultRow[]);
+        setResultRows(result.results ?? []);
       }
       setLoading(false);
     }
