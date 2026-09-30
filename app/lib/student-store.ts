@@ -32,6 +32,8 @@ type StudentRow = {
   id: string; created_at: string; full_name: string | null; admission_number: string | null;
   class_name: string | null; session: string | null; term: string | null;
   field_of_study?: SeniorField | null; trade_subject?: string | null;
+  phone?: string | null; parent_guardian_name?: string | null; parent_guardian_phone?: string | null;
+  is_active?: boolean;
 };
 
 type StudentExtras = Record<string, { parentGuardianName: string; parentGuardianPhone: string }>;
@@ -49,7 +51,7 @@ function fromRow(row: StudentRow): StudentRecord {
     admissionNumber: normalizeAdmissionNumber(row.admission_number ?? ""),
     className: row.class_name ?? "", session: row.session ?? "", term: row.term ?? "",
     fieldOfStudy: row.field_of_study ?? null, tradeSubject: row.trade_subject ?? null,
-    parentGuardianName: extra?.parentGuardianName ?? "", parentGuardianPhone: extra?.parentGuardianPhone ?? "", status: "Active",
+    parentGuardianName: row.parent_guardian_name ?? extra?.parentGuardianName ?? "", parentGuardianPhone: row.parent_guardian_phone ?? extra?.parentGuardianPhone ?? "", status: row.is_active === false ? "Inactive" : "Active",
   };
 }
 

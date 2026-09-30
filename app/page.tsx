@@ -1,22 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
-type FutureSection = "University Education" | "Tertiary Education";
 
 export default function Home() {
-  const [comingSoonSection, setComingSoonSection] = useState<FutureSection | null>(null);
-
-  useEffect(() => {
-    if (!comingSoonSection) return;
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setComingSoonSection(null);
-    }
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [comingSoonSection]);
-
   return (
     <main className="landing-shell min-h-screen overflow-hidden bg-white text-slate-950">
       <style>{`
@@ -80,7 +67,7 @@ export default function Home() {
                     { icon: "04", title: "Everyday details", detail: "Fees and timetable" },
                   ].map((item, index) => <div key={item.title} className="landing-rise rounded-xl border border-white/10 bg-white/[0.045] p-4 transition duration-200 hover:-translate-y-0.5 hover:border-blue-200/25 hover:bg-white/[0.075]" style={{ animationDelay: `${220 + index * 65}ms` }}><span className="text-[10px] font-bold tracking-[0.15em] text-cyan-200">{item.icon}</span><h2 className="mt-3 text-sm font-semibold text-white">{item.title}</h2><p className="mt-1 text-xs text-slate-400">{item.detail}</p></div>)}
                 </div>
-                <div className="mt-4 flex items-center justify-between rounded-xl border border-blue-200/10 bg-gradient-to-r from-blue-500/15 to-cyan-400/10 px-4 py-3"><span className="text-xs font-medium text-slate-200">University and Tertiary</span><span className="text-[10px] font-semibold uppercase tracking-wide text-blue-200">Coming soon</span></div>
+                <div className="mt-4 flex items-center justify-between rounded-xl border border-blue-200/10 bg-gradient-to-r from-blue-500/15 to-cyan-400/10 px-4 py-3"><span className="text-xs font-medium text-slate-200">University and Tertiary Education</span><span className="text-[10px] font-semibold uppercase tracking-wide text-blue-200">Outside current portal</span></div>
               </div>
             </div>
           </div>
@@ -97,14 +84,14 @@ export default function Home() {
 
       <section id="academics" className="scroll-mt-12 border-y border-slate-200/70 bg-slate-50 px-5 py-20 sm:px-8 lg:py-24">
         <div className="mx-auto max-w-[1200px]">
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">One platform, growing with you</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Education sections</h2></div><p className="max-w-md text-sm leading-6 text-slate-500">Start with Secondary Education. Additional learning environments are in development.</p></div>
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Secondary school portal</p><h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Education sections</h2></div><p className="max-w-md text-sm leading-6 text-slate-500">This UniAllege project currently supports secondary education. University and tertiary systems are outside its scope.</p></div>
           <div className="mt-9 grid gap-4 lg:grid-cols-3">
             <Link href="/login" className="group relative isolate overflow-hidden rounded-3xl border border-blue-200 bg-slate-950 p-6 text-white shadow-[0_22px_55px_-35px_rgba(29,78,216,.65)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_28px_70px_-35px_rgba(29,78,216,.72)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-300 sm:p-7">
               <span aria-hidden="true" className="absolute -right-20 -top-24 -z-10 h-64 w-64 rounded-full bg-blue-500/25 blur-3xl transition group-hover:bg-cyan-400/25" />
               <span className="inline-flex items-center gap-2 rounded-full border border-cyan-200/20 bg-cyan-200/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-100"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300" /> Current focus</span>
               <h3 className="mt-6 text-2xl font-semibold tracking-tight">Secondary Education</h3><p className="mt-3 min-h-12 text-sm leading-6 text-slate-300">The active UniAllege portal for secondary school students and administrators.</p><span className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-white">Enter the portal <span className="transition-transform group-hover:translate-x-1" aria-hidden="true">→</span></span>
             </Link>
-            {(["University Education", "Tertiary Education"] as const).map((section, index) => <button key={section} type="button" onClick={() => setComingSoonSection(section)} className="group rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-[0_18px_55px_-42px_rgba(15,23,42,.4)] transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-[0_28px_70px_-45px_rgba(37,99,235,.45)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-300 sm:p-7" style={{ animationDelay: `${index * 80}ms` }}><span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Coming soon</span><h3 className="mt-6 text-2xl font-semibold tracking-tight text-slate-900">{section}</h3><p className="mt-3 min-h-12 text-sm leading-6 text-slate-500">A dedicated learning experience is currently in development.</p><span className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-blue-700">Learn more <span className="transition-transform group-hover:translate-x-1" aria-hidden="true">→</span></span></button>)}
+            {(["University Education", "Tertiary Education"] as const).map((section, index) => <article key={section} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_55px_-42px_rgba(15,23,42,.4)] sm:p-7" style={{ animationDelay: `${index * 80}ms` }}><span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Not included</span><h3 className="mt-6 text-2xl font-semibold tracking-tight text-slate-900">{section}</h3><p className="mt-3 min-h-12 text-sm leading-6 text-slate-500">This application is scoped to secondary education.</p></article>)}
           </div>
         </div>
       </section>
@@ -115,7 +102,6 @@ export default function Home() {
 
       <footer className="border-t border-white/10 bg-slate-950 px-5 py-7 text-center text-xs text-slate-400 sm:px-8">© {new Date().getFullYear()} UniAllege <span className="mx-2 text-slate-600">·</span> Secondary Education is our current focus</footer>
 
-      {comingSoonSection && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-md" onMouseDown={(event) => { if (event.target === event.currentTarget) setComingSoonSection(null); }}><section role="dialog" aria-modal="true" aria-labelledby="coming-soon-title" className="landing-rise w-full max-w-md rounded-3xl border border-white/60 bg-white p-7 shadow-[0_35px_100px_-35px_rgba(2,6,23,.8)] sm:p-9"><span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-xl font-semibold text-blue-700" aria-hidden="true">✦</span><p className="mt-6 text-xs font-bold uppercase tracking-[0.17em] text-blue-700">UniAllege Education</p><h2 id="coming-soon-title" className="mt-2 text-2xl font-semibold tracking-tight">{comingSoonSection} is coming soon</h2><p className="mt-3 text-sm leading-7 text-slate-600">This section is under development. Our active work is focused on Secondary Education.</p><button type="button" onClick={() => setComingSoonSection(null)} className="mt-7 w-full rounded-xl bg-blue-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-300">Back to UniAllege</button></section></div>}
     </main>
   );
 }

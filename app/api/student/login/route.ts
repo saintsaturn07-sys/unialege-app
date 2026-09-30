@@ -20,10 +20,11 @@ export async function POST(request: Request) {
   try {
     const db = getSupabaseAdmin();
     const { data: student, error } = await db.from("students")
-      .select("id, created_at, admission_number, full_name, password, class_name, session, term, field_of_study, trade_subject, auth_user_id")
+      .select("id, created_at, admission_number, full_name, password, class_name, session, term, field_of_study, trade_subject, auth_user_id, phone, parent_guardian_name, parent_guardian_phone, is_active")
       .eq("admission_number", admissionNumber).maybeSingle();
     if (error) throw error;
     if (!student) return Response.json({ error: "Invalid admission number or password. Check your credentials or contact the school administrator." }, { status: 401, headers: noStoreHeaders() });
+    if (!student.is_active) return Response.json({ error: "This student account is inactive. Contact the school administrator." }, { status: 403, headers: noStoreHeaders() });
 
     let authUserId: string | null = student.auth_user_id ?? null;
     if (!authUserId) {
@@ -48,10 +49,12 @@ export async function POST(request: Request) {
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-    if (!supabaseUrl || !publishableKey) throw new Error("Public Supabase configuration is missing.");
-    const authClient = createClient(supabaseUrl, publishableKey, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } });
-    const { data: authResult, error: authError } = await authClient.auth.signInWithPassword({ email: authEmail(student.id), password });
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !anonKey) throw new Error("Public Supabase configuration is missing.");
+    const { data: linkedAuth, error: linkedAuthError } = await db.auth.admin.getUserById(authUserId);
+    if (linkedAuthError || !linkedAuth.user?.email) throw new Error("The student's secure sign-in account could not be found.");
+    const authClient = createClient(supabaseUrl, anonKey, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } });
+    const { data: authResult, error: authError } = await authClient.auth.signInWithPassword({ email: linkedAuth.user.email, password });
     if (authError || !authResult.user || authResult.user.id !== authUserId) {
       return Response.json({ error: "Unable to sign in with the linked secure account. Contact the school administrator to reset the password." }, { status: 401, headers: noStoreHeaders() });
     }
@@ -59,8 +62,8 @@ export async function POST(request: Request) {
     return Response.json({ student: {
       id: student.id, fullName: student.full_name ?? "", admissionNumber,
       className: student.class_name ?? "", session: student.session ?? "", term: student.term ?? "",
-      parentGuardianName: "", parentGuardianPhone: "", fieldOfStudy: student.field_of_study ?? null,
-      tradeSubject: student.trade_subject ?? null,
+      parentGuardianName: student.parent_guardian_name ?? "", parentGuardianPhone: student.parent_guardian_phone ?? "", fieldOfStudy: student.field_of_study ?? null,
+      tradeSubject: student.trade_subject ?? null, email: linkedAuth.user.email, phone: student.phone ?? "",
     } }, { headers: noStoreHeaders() });
   } catch {
     return Response.json({ error: "Unable to check your login right now. Please try again." }, { status: 503, headers: noStoreHeaders() });

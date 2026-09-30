@@ -7,9 +7,10 @@ import { clearAdminSession, verifyAdminSession, type AdminSession } from "../../
 import { getStudents, type StudentRecord } from "../../lib/student-store";
 import { getSubjectsForStudent, isSeniorClass, requiresTradeSubject } from "../../lib/subjects";
 
-type ResultRow = { id: string; student_id: string; subject: string; ca_score: number; exam_score: number; session: string; term: string };
-type ResultForm = { subject: string; ca: string; exam: string; session: string; term: string };
-const blankForm: ResultForm = { subject: "", ca: "", exam: "", session: "2026/2027", term: "First Term" };
+type ResultAssessmentType = "formal" | "mock" | "unclassified";
+type ResultRow = { id: string; student_id: string; subject: string; ca_score: number; exam_score: number; session: string; term: string; is_published: boolean; ca_recorded: boolean; assessment_type: ResultAssessmentType; cbt_score?: number | null; cbt_submitted_at?: string | null };
+type ResultForm = { subject: string; ca: string; exam: string; session: string; term: string; isPublished: boolean; assessmentType: ResultAssessmentType };
+const blankForm: ResultForm = { subject: "", ca: "", exam: "", session: "2026/2027", term: "First Term", isPublished: false, assessmentType: "formal" };
 const terms = ["First Term", "Second Term", "Third Term"];
 const inputClass = "mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
@@ -18,6 +19,10 @@ export default function AdminResultsPage() {
   const [admin, setAdmin] = useState<AdminSession | null>(null);
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [studentId, setStudentId] = useState("");
+  const [classFilter, setClassFilter] = useState("All Classes");
+  const [sessionFilter, setSessionFilter] = useState("All Sessions");
+  const [termFilter, setTermFilter] = useState("All Terms");
+  const [subjectFilter, setSubjectFilter] = useState("All Subjects");
   const [rows, setRows] = useState<ResultRow[]>([]);
   const [form, setForm] = useState<ResultForm>(blankForm);
   const [editingId, setEditingId] = useState("");
@@ -66,7 +71,7 @@ export default function AdminResultsPage() {
 
   function editResult(row: ResultRow) {
     setEditingId(row.id);
-    setForm({ subject: row.subject, ca: String(row.ca_score), exam: String(row.exam_score), session: row.session, term: row.term });
+    setForm({ subject: row.subject, ca: row.ca_recorded ? String(row.ca_score) : "", exam: String(row.exam_score), session: row.session, term: row.term, isPublished: row.is_published, assessmentType: row.assessment_type });
     setError(""); setSuccess("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -81,7 +86,7 @@ export default function AdminResultsPage() {
     if (!form.subject.trim() || !form.session.trim() || !form.term) { setError("Enter a subject, session, and term."); return; }
     if (!allowedSubjects.some((subject) => subject.name === form.subject)) { setError("Choose a subject offered for this student’s class and field."); return; }
     setSaving(true);
-    const record = { student_id: studentId, subject: form.subject.trim(), ca_score: ca, exam_score: exam, session: form.session.trim(), term: form.term };
+    const record = { student_id: studentId, subject: form.subject.trim(), ca_score: ca, exam_score: exam, session: form.session.trim(), term: form.term, is_published: form.isPublished, assessment_type: form.assessmentType };
     let response: Response;
     try { response = await fetch("/api/admin/results", { method: "POST", headers: { "Content-Type": "application/json" }, cache: "no-store", body: JSON.stringify({ ...record, id: editingId || undefined }) }); }
     catch { setSaving(false); setError("Unable to save result. Please try again."); return; }
@@ -105,9 +110,26 @@ export default function AdminResultsPage() {
     } catch { setError("Unable to delete result. Please try again."); }
   }
 
+  async function togglePublication(row: ResultRow) {
+    setError(""); setSuccess("");
+    try {
+      const response = await fetch(`/api/admin/results/${row.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, cache: "no-store", body: JSON.stringify({ is_published: !row.is_published }) });
+      const result = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) { setError(`Unable to update publication: ${result.error ?? "Please try again."}`); return; }
+      setSuccess(row.is_published ? "Result unpublished; it no longer appears in student reports or rankings." : "Result published to the student report and eligible rankings.");
+      await loadResults(studentId);
+    } catch { setError("Unable to update publication. Please try again."); }
+  }
+
   function logout() { clearAdminSession(); }
   if (!admin) return <main className="app-shell min-h-screen bg-slate-50" aria-busy="true" />;
   const selectedStudent = students.find((item) => item.id === studentId);
+  const studentChoices = students.filter((item) => classFilter === "All Classes" || item.className === classFilter);
+  const sessions = [...new Set(rows.map((row) => row.session))];
+  const subjects = [...new Set(rows.map((row) => row.subject))];
+  const visibleRows = rows.filter((row) => (sessionFilter === "All Sessions" || row.session === sessionFilter)
+    && (termFilter === "All Terms" || row.term === termFilter)
+    && (subjectFilter === "All Subjects" || row.subject === subjectFilter));
   const allowedSubjects = selectedStudent ? getSubjectsForStudent(selectedStudent.className, selectedStudent.fieldOfStudy, selectedStudent.tradeSubject) : [];
   const studentProfileReady = Boolean(selectedStudent && (!isSeniorClass(selectedStudent.className) || (selectedStudent.fieldOfStudy && (!requiresTradeSubject(selectedStudent.className) || selectedStudent.tradeSubject))));
 
@@ -126,7 +148,7 @@ export default function AdminResultsPage() {
           {success && <p role="status" className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{success}</p>}
           <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
             <h3 className="font-bold">{editingId ? "Edit Result" : "Enter a Result"}</h3>
-            <div className="mt-4"><label className="block text-sm font-medium">Select Student<select value={studentId} disabled={loadingStudents} onChange={(event) => chooseStudent(event.target.value)} className={inputClass}><option value="">{loadingStudents ? "Loading students…" : "Choose a student"}</option>{students.map((student) => <option key={student.id} value={student.id}>{student.fullName} · {student.admissionNumber}</option>)}</select></label></div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="block text-sm font-medium">Filter by Class<select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className={inputClass}><option>All Classes</option>{[...new Set(students.map((student) => student.className))].sort().map((className) => <option key={className}>{className}</option>)}</select></label><label className="block text-sm font-medium">Select Student<select value={studentId} disabled={loadingStudents} onChange={(event) => chooseStudent(event.target.value)} className={inputClass}><option value="">{loadingStudents ? "Loading students…" : "Choose a student"}</option>{studentChoices.map((student) => <option key={student.id} value={student.id}>{student.fullName} · {student.admissionNumber}</option>)}</select></label></div>
             {students.length === 0 && !loadingStudents ? <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">Add a student before entering results.</p> : <form onSubmit={saveResult} className="mt-4">
               {selectedStudent && !studentProfileReady && <p className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Assign this senior student a field of study and one trade subject in Student Management before entering results.</p>}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -135,15 +157,18 @@ export default function AdminResultsPage() {
                 <label className="text-sm font-medium">Exam Score <span className="font-normal text-slate-500">(0–70)</span><input required type="number" min="0" max="70" step="any" value={form.exam} onChange={(event) => setForm({ ...form, exam: event.target.value })} className={inputClass} /></label>
                 <label className="text-sm font-medium">Session<input required value={form.session} onChange={(event) => setForm({ ...form, session: event.target.value })} placeholder="e.g. 2026/2027" className={inputClass} /></label>
                 <label className="text-sm font-medium">Term<select value={form.term} onChange={(event) => setForm({ ...form, term: event.target.value })} className={inputClass}>{terms.map((term) => <option key={term}>{term}</option>)}</select></label>
+                <label className="text-sm font-medium">Assessment type<select value={form.assessmentType} onChange={(event) => setForm({ ...form, assessmentType: event.target.value as ResultAssessmentType, isPublished: event.target.value === "formal" ? form.isPublished : false })} className={inputClass}><option value="formal">Formal academic result</option><option value="mock">Mock (excluded from report/rankings)</option><option value="unclassified">Unclassified legacy record</option></select></label>
               </div>
+              <label className="mt-4 flex items-start gap-3 rounded-xl bg-slate-50 p-4 text-sm"><input type="checkbox" checked={form.isPublished} disabled={form.assessmentType !== "formal"} onChange={(event) => setForm({ ...form, isPublished: event.target.checked })} className="mt-0.5" /><span><span className="font-semibold">Publish this academic result</span><span className="mt-1 block text-xs text-slate-500">Only publish verified, completed formal assessment scores. Published results appear in student reports and ranking calculations.</span></span></label>
               <div className="mt-5 flex flex-wrap justify-end gap-3">{editingId && <button type="button" onClick={() => { setEditingId(""); setForm(blankForm); setError(""); }} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold">Cancel Edit</button>}<button type="submit" disabled={saving || !studentId || !studentProfileReady || allowedSubjects.length === 0} className="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60">{saving ? "Saving…" : editingId ? "Save Changes" : "Save Result"}</button></div>
             </form>}
           </section>
           <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
             <div><h3 className="font-bold">Existing Results</h3><p className="mt-1 text-sm text-slate-500">{selectedStudent ? `Recorded results for ${selectedStudent.fullName}.` : "Select a student to view results."}</p></div>
-            {loadingResults ? <p role="status" className="py-10 text-center text-sm text-slate-500">Loading results…</p> : !error && rows.length === 0 ? <p className="mt-5 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">{selectedStudent ? "No results recorded for this student yet." : "Select a student to view their results."}</p> : rows.length > 0 && <>
-              <div className="mt-5 space-y-3 md:hidden">{rows.map((row) => <article key={row.id} className="rounded-xl border border-slate-100 p-4"><div className="flex items-start justify-between gap-3"><h4 className="font-semibold">{row.subject}</h4><span className="text-right text-xs text-slate-500">{row.term}<br />{row.session}</span></div><p className="mt-3 text-sm text-slate-600">CA {Number(row.ca_score)} / 30 · Exam {Number(row.exam_score)} / 70 · Total {Number(row.ca_score) + Number(row.exam_score)} / 100</p><div className="mt-4 flex gap-4"><button type="button" onClick={() => editResult(row)} className="text-sm font-semibold text-blue-700">Edit</button><button type="button" onClick={() => void deleteResult(row)} className="text-sm font-semibold text-red-700">Delete</button></div></article>)}</div>
-              <div className="mt-5 hidden overflow-x-auto md:block"><table className="w-full min-w-[760px] border-collapse text-left"><thead><tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400"><th className="px-3 py-3">Subject</th><th className="px-3 py-3">CA</th><th className="px-3 py-3">Exam</th><th className="px-3 py-3">Total</th><th className="px-3 py-3">Session</th><th className="px-3 py-3">Term</th><th className="px-3 py-3">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row) => <tr key={row.id} className="text-sm hover:bg-slate-50"><td className="px-3 py-4 font-semibold">{row.subject}</td><td className="px-3 py-4">{Number(row.ca_score)} / 30</td><td className="px-3 py-4">{Number(row.exam_score)} / 70</td><td className="px-3 py-4 font-bold">{Number(row.ca_score) + Number(row.exam_score)} / 100</td><td className="px-3 py-4">{row.session}</td><td className="px-3 py-4">{row.term}</td><td className="px-3 py-4"><div className="flex gap-3"><button type="button" onClick={() => editResult(row)} className="font-semibold text-blue-700 hover:underline">Edit</button><button type="button" onClick={() => void deleteResult(row)} className="font-semibold text-red-700 hover:underline">Delete</button></div></td></tr>)}</tbody></table></div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3"><label className="text-sm">Session<select className={inputClass} value={sessionFilter} onChange={(event) => setSessionFilter(event.target.value)}><option>All Sessions</option>{sessions.map((value) => <option key={value}>{value}</option>)}</select></label><label className="text-sm">Term<select className={inputClass} value={termFilter} onChange={(event) => setTermFilter(event.target.value)}><option>All Terms</option>{terms.map((value) => <option key={value}>{value}</option>)}</select></label><label className="text-sm">Subject<select className={inputClass} value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)}><option>All Subjects</option>{subjects.map((value) => <option key={value}>{value}</option>)}</select></label></div>
+            {loadingResults ? <p role="status" className="py-10 text-center text-sm text-slate-500">Loading results…</p> : !error && rows.length === 0 ? <p className="mt-5 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">{selectedStudent ? "No results recorded for this student yet." : "Select a student to view their results."}</p> : visibleRows.length === 0 ? <p className="mt-5 rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500">No results match these filters.</p> : <>
+              <div className="mt-5 space-y-3 md:hidden">{visibleRows.map((row) => <article key={row.id} className="rounded-xl border border-slate-100 p-4"><div className="flex items-start justify-between gap-3"><div><h4 className="font-semibold">{row.subject}</h4><span className={`mt-1 inline-block rounded-full px-2 py-1 text-xs font-semibold ${row.is_published ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>{row.is_published ? "Published" : "Draft"} · {row.assessment_type}</span></div><span className="text-right text-xs text-slate-500">{row.term}<br />{row.session}</span></div><p className="mt-3 text-sm text-slate-600">CA {row.ca_recorded ? Number(row.ca_score) : "Not entered"} / 30 · Exam {Number(row.exam_score)} / 70 · Total {row.ca_recorded ? Number(row.ca_score) + Number(row.exam_score) : "Incomplete"} / 100</p><p className="mt-1 text-xs text-slate-500">{row.cbt_submitted_at ? `CBT score match: ${row.cbt_score}/70 · submitted ${new Date(row.cbt_submitted_at).toLocaleDateString("en-NG")}` : "No matching completed CBT attempt"}</p><div className="mt-4 flex flex-wrap gap-4"><button type="button" onClick={() => editResult(row)} className="text-sm font-semibold text-blue-700">Edit</button><button type="button" onClick={() => void togglePublication(row)} className="text-sm font-semibold text-violet-700">{row.is_published ? "Unpublish" : "Publish"}</button><button type="button" onClick={() => void deleteResult(row)} className="text-sm font-semibold text-red-700">Delete</button></div></article>)}</div>
+              <div className="mt-5 hidden overflow-x-auto md:block"><table className="w-full min-w-[880px] border-collapse text-left"><thead><tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400"><th className="px-3 py-3">Subject</th><th className="px-3 py-3">CA</th><th className="px-3 py-3">Exam</th><th className="px-3 py-3">Total</th><th className="px-3 py-3">Session</th><th className="px-3 py-3">Term</th><th className="px-3 py-3">Publication / type</th><th className="px-3 py-3">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{visibleRows.map((row) => <tr key={row.id} className="text-sm hover:bg-slate-50"><td className="px-3 py-4 font-semibold">{row.subject}</td><td className="px-3 py-4">{row.ca_recorded ? Number(row.ca_score) : "Not entered"} / 30</td><td className="px-3 py-4">{Number(row.exam_score)} / 70</td><td className="px-3 py-4 font-bold">{row.ca_recorded ? Number(row.ca_score) + Number(row.exam_score) : "Incomplete"} / 100</td><td className="px-3 py-4">{row.session}</td><td className="px-3 py-4">{row.term}</td><td className="px-3 py-4">{row.is_published ? "Published" : "Draft"} · {row.assessment_type}</td><td className="px-3 py-4"><div className="flex gap-3"><button type="button" onClick={() => editResult(row)} className="font-semibold text-blue-700 hover:underline">Edit</button><button type="button" onClick={() => void togglePublication(row)} className="font-semibold text-violet-700 hover:underline">{row.is_published ? "Unpublish" : "Publish"}</button><button type="button" onClick={() => void deleteResult(row)} className="font-semibold text-red-700 hover:underline">Delete</button></div></td></tr>)}</tbody></table></div>
             </>}
           </section>
         </div>

@@ -62,9 +62,9 @@ export async function requireStudent() {
   if (!session) return null;
   const db = getSupabaseAdmin();
   const { data, error } = await db.from("students")
-    .select("id, auth_user_id, admission_number, full_name, class_name, session, term, field_of_study, trade_subject")
+    .select("id, auth_user_id, admission_number, full_name, class_name, session, term, field_of_study, trade_subject, phone, parent_guardian_name, parent_guardian_phone, is_active")
     .eq("auth_user_id", session.sub).maybeSingle();
-  if (error || !data) return null;
+  if (error || !data || !data.is_active) return null;
   const { data: authUser, error: authError } = await db.auth.admin.getUserById(session.sub);
   if (authError || !authUser.user) return null;
   return data;

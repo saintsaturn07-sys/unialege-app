@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { clearStudentSession, getStudentSession, type StudentSession } from "../lib/student-store";
 import { fieldLabel, getSubjectCategories, getSubjectsForStudent, isSeniorClass, requiresTradeSubject } from "../lib/subjects";
+import { SectionHeading } from "../components/portal-ui";
+
+type SubjectResult = { subject: string; total: number | null };
 
 const navigation = [
   { label: "Dashboard", href: "/dashboard", icon: "⌂" },
@@ -21,11 +24,15 @@ export default function SubjectsPage() {
   const [student, setStudent] = useState<StudentSession | null>(null);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All Subjects");
+  const [resultBySubject, setResultBySubject] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const session = getStudentSession();
     if (session) {
       setStudent(session);
+      void fetch(`/api/student/results?session=${encodeURIComponent(session.session)}&term=${encodeURIComponent(session.term)}`, { cache: "no-store", credentials: "same-origin" })
+        .then(async (response) => { if (!response.ok) return; const payload = await response.json() as { results?: SubjectResult[] }; setResultBySubject(Object.fromEntries((payload.results ?? []).filter((row): row is SubjectResult & { total: number } => typeof row.total === "number").map((row) => [row.subject, row.total]))); })
+        .catch(() => setResultBySubject({}));
     } else {
       router.replace("/login");
     }
@@ -149,8 +156,7 @@ export default function SubjectsPage() {
             <section className="subjects-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6" style={{ animationDelay: "210ms" }}>
               <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
                 <div>
-                  <h2 className="text-lg font-bold">Subject list</h2>
-                  <p className="mt-1 text-sm text-slate-500">Browse subjects offered for your class and field.</p>
+                  <SectionHeading eyebrow="Your learning" title="Subject list" description="Subjects assigned to your class and field, with only published result data." />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:w-[520px]">
                   <label className="relative block">
@@ -182,17 +188,19 @@ export default function SubjectsPage() {
                   <article key={subject.code} className="subjects-rise rounded-2xl border border-slate-100 p-5 transition duration-200 hover:-translate-y-1 hover:shadow-md" style={{ animationDelay: `${index * 45}ms` }}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 gap-3">
-                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white ${subject.color}`}>{subject.code}</span>
+                        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xs font-bold text-white shadow-lg shadow-slate-900/10 ring-1 ring-white/30 ${subject.color}`}>{subject.code}</span>
                         <div className="min-w-0">
                           <h3 className="font-semibold leading-snug">{subject.name}</h3>
                           <p className="mt-1 text-xs text-slate-500">{subject.category}</p>
                         </div>
                       </div>
-                      <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Offered</span>
+                      <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">Assigned</span>
                     </div>
                     <dl className="mt-5 space-y-2 border-t border-slate-100 pt-4 text-sm">
                       <div className="flex justify-between gap-3"><dt className="text-slate-500">Class</dt><dd className="text-right font-medium">{student.className}</dd></div>
-                      <div className="flex justify-between gap-3"><dt className="text-slate-500">Subject group</dt><dd className="text-right font-medium">{subject.category}</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-slate-500">Category</dt><dd className="text-right font-medium">{subject.category}</dd></div>
+                      <div className="flex justify-between gap-3"><dt className="text-slate-500">Current result</dt><dd className="text-right font-semibold">{resultBySubject[subject.name] === undefined ? "Not published" : `${resultBySubject[subject.name]} / 100`}</dd></div>
+                      {resultBySubject[subject.name] !== undefined && <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-500" style={{ width: `${Math.max(0, Math.min(100, resultBySubject[subject.name]))}%` }} /></div>}
                     </dl>
                   </article>
                 ))}

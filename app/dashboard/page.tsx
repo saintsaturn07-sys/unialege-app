@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { clearStudentSession, getStudentSession, type StudentSession } from "../lib/student-store";
 import { fieldLabel, getSubjectsForStudent, isSeniorClass, requiresTradeSubject } from "../lib/subjects";
+import { MetricCard, ProgressMeter, SectionHeading } from "../components/portal-ui";
 
 const navigation = [
   { label: "Dashboard", href: "#dashboard", icon: "⌂" },
@@ -17,35 +18,32 @@ const navigation = [
   { label: "Profile", href: "/profile", icon: "◎" },
 ];
 
-const announcements = [
-  { category: "School notice", date: "Today · 9:15 AM", title: "Inter-house sports day is next Friday", detail: "Students should wear their house colours and arrive by 8:00 AM.", tone: "bg-blue-100 text-blue-700" },
-  { category: "Academics", date: "Yesterday", title: "Revision timetable now available", detail: "The subject revision schedule has been shared with each class teacher.", tone: "bg-violet-100 text-violet-700" },
-  { category: "Reminder", date: "Sep 18, 2026", title: "Return library books by month end", detail: "Please return borrowed books to the school library before Friday.", tone: "bg-amber-100 text-amber-700" },
-];
-
-const upcoming = [
-  { day: "24", month: "SEP", type: "Test", title: "Mathematics · Algebra test", time: "Thursday · Period 2", tone: "border-blue-500" },
-  { day: "29", month: "SEP", type: "Assignment", title: "Biology · Cells and tissues", time: "Tuesday · Submit in class", tone: "border-violet-500" },
-  { day: "05", month: "OCT", type: "Examination", title: "First term examinations begin", time: "Monday · See exam timetable", tone: "border-amber-500" },
-  { day: "09", month: "OCT", type: "School event", title: "Inter-house sports day", time: "Friday · School field", tone: "border-emerald-500" },
-];
-
-function gradeFor(score: number) {
-  if (score >= 80) return "A";
-  if (score >= 70) return "B";
-  if (score >= 60) return "C";
-  if (score >= 50) return "D";
-  return "F";
-}
+type AnnouncementPreview = { id: string; category: string; published_at: string | null; created_at: string; title: string; description: string };
+type Performance = { percentage: number | null; class_position: number | null; total_marks: number | null; maximum_marks: number | null };
+type ExamPreview = { id: string; title: string; subject: string; duration_minutes: number; student_status: "available" | "in_progress" | "completed" };
+type TimetablePreview = { id: string; day_of_week: string; period: number; start_time: string; subject: string; teacher: string | null };
+type FeePreview = { total_due: number; total_paid: number; fee_items: { id: string; name: string; balance: number }[]; payments: { id: string; status: string }[] };
 
 export default function DashboardPage() {
   const router = useRouter();
   const [student, setStudent] = useState<StudentSession | null>(null);
+  const [announcementItems, setAnnouncementItems] = useState<AnnouncementPreview[]>([]);
+  const [performance, setPerformance] = useState<Performance | null>(null);
+  const [examItems, setExamItems] = useState<ExamPreview[]>([]);
+  const [timetableItems, setTimetableItems] = useState<TimetablePreview[]>([]);
+  const [feeSummary, setFeeSummary] = useState<FeePreview | null>(null);
 
   useEffect(() => {
     const session = getStudentSession();
     if (session) {
       setStudent(session);
+      void fetch("/api/student/announcements", { cache: "no-store", credentials: "same-origin" })
+        .then(async (response) => { const result = await response.json() as { announcements?: AnnouncementPreview[] }; if (response.ok) setAnnouncementItems(result.announcements ?? []); })
+        .catch(() => setAnnouncementItems([]));
+      void fetch(`/api/student/results?session=${encodeURIComponent(session.session)}&term=${encodeURIComponent(session.term)}`, { cache: "no-store" }).then(async (response) => { if (response.ok) { const result = await response.json() as { summary?: Performance }; setPerformance(result.summary ?? null); } }).catch(() => {});
+      void fetch("/api/cbt/exams", { cache: "no-store" }).then(async (response) => { if (response.ok) { const result = await response.json() as { exams?: ExamPreview[] }; setExamItems(result.exams ?? []); } }).catch(() => {});
+      void fetch("/api/student/timetable", { cache: "no-store" }).then(async (response) => { if (response.ok) { const result = await response.json() as { entries?: TimetablePreview[] }; setTimetableItems(result.entries ?? []); } }).catch(() => {});
+      void fetch("/api/student/fees", { cache: "no-store", credentials: "same-origin" }).then(async (response) => { if (response.ok) setFeeSummary(await response.json() as FeePreview); }).catch(() => {});
     } else {
       router.replace("/login");
     }
@@ -69,10 +67,10 @@ export default function DashboardPage() {
   const subjects = getSubjectsForStudent(student.className, student.fieldOfStudy, student.tradeSubject);
 
   const overview = [
-    { label: "Current Class", value: student.className, note: "Current class", icon: "▤", tone: "bg-blue-50 text-blue-700" },
-    { label: "Overall Average", value: "Not available", note: "No grade average is calculated yet", icon: "✦", tone: "bg-violet-50 text-violet-700" },
-    { label: "Attendance", value: "Not available", note: "No attendance records yet", icon: "✓", tone: "bg-emerald-50 text-emerald-700" },
-    { label: "Position in Class", value: "Not available", note: "Not available yet", icon: "↗", tone: "bg-amber-50 text-amber-700" },
+    { label: "Current Class", value: student.className, note: student.fieldOfStudy ? fieldLabel(student.fieldOfStudy) : "Enrolled class", icon: "▤", tone: "bg-blue-50 text-blue-700", href: "/courses" },
+    { label: "Overall Average", value: performance?.percentage == null ? "Not available" : `${performance.percentage.toFixed(1)}%`, note: performance ? "Published formal results" : "No published formal results", icon: "✦", tone: "bg-violet-50 text-violet-700", href: "/results" },
+    { label: "Attendance", value: "Not available", note: "Attendance records are not configured", icon: "✓", tone: "bg-emerald-50 text-emerald-700", href: "/dashboard" },
+    { label: "Position in Class", value: performance?.class_position ? String(performance.class_position) : "Not available", note: performance?.class_position ? "Based on at least three published subjects" : "Insufficient published class results", icon: "↗", tone: "bg-amber-50 text-amber-700", href: "/results" },
   ];
 
   return (
@@ -134,7 +132,8 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-sm font-medium text-blue-300">Welcome back</p>
                   <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Hello, {student.fullName} <span aria-hidden="true">✦</span></h2>
-                  <p className="mt-3 text-sm text-slate-300">Here&apos;s your school progress and what&apos;s coming up.</p>
+                  <p className="mt-3 text-sm text-slate-300">Your learning, school updates, and next steps for this term.</p>
+                  <div className="mt-5 flex flex-wrap gap-2"><Link href="/cbt" className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15">Open exams</Link><Link href="/profile" className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-blue-100 transition hover:bg-white/10">Account settings</Link></div>
                 </div>
                 <dl className="grid grid-cols-2 gap-x-8 gap-y-4 rounded-2xl border border-white/15 bg-white/5 p-4 sm:grid-cols-4 lg:min-w-[520px] lg:px-5">
                   <div><dt className="text-xs text-slate-400">Admission Number</dt><dd className="mt-1 text-sm font-semibold">{student.admissionNumber}</dd></div>
@@ -146,16 +145,7 @@ export default function DashboardPage() {
             </section>
 
             <section aria-label="Student overview" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {overview.map((item, index) => (
-                <article key={item.label} className="dashboard-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md" style={{ animationDelay: `${index * 70}ms` }}>
-                  <div className="flex items-start justify-between">
-                    <p className="text-sm font-medium text-slate-500">{item.label}</p>
-                    <span className={`flex h-9 w-9 items-center justify-center rounded-xl text-lg ${item.tone}`} aria-hidden="true">{item.icon}</span>
-                  </div>
-                  <p className="mt-4 text-2xl font-bold tracking-tight">{item.value}</p>
-                  <p className="mt-1 text-xs text-slate-500">{item.note}</p>
-                </article>
-              ))}
+              {overview.map((item) => <MetricCard key={item.label} label={item.label} value={item.value} detail={item.note} icon={item.icon} tone={item.label === "Overall Average" ? "violet" : item.label === "Attendance" ? "emerald" : item.label === "Position in Class" ? "amber" : "blue"} href={item.href} />)}
             </section>
 
             <section id="subjects" className="dashboard-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
@@ -194,38 +184,30 @@ export default function DashboardPage() {
               <section id="upcoming" className="dashboard-rise min-w-0 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6" style={{ animationDelay: "170ms" }}>
                 <div>
                   <h2 className="text-lg font-bold">Upcoming</h2>
-                  <p className="mt-1 text-sm text-slate-500">Sample tests, assignments, and school events</p>
+                  <p className="mt-1 text-sm text-slate-500">Published exams and your current timetable</p>
                 </div>
-                <div className="mt-5 space-y-4">
-                  {upcoming.map((item) => (
-                    <article key={item.title} className={`flex gap-4 border-l-2 pl-4 ${item.tone}`}>
-                      <div className="w-10 shrink-0 text-center"><p className="text-lg font-bold leading-none">{item.day}</p><p className="mt-1 text-[10px] font-bold tracking-widest text-slate-500">{item.month}</p></div>
-                      <div className="min-w-0"><span className="text-[10px] font-bold uppercase tracking-wider text-blue-700">{item.type}</span><h3 className="mt-0.5 text-sm font-semibold">{item.title}</h3><p className="mt-1 text-xs text-slate-500">{item.time}</p></div>
-                    </article>
-                  ))}
-                </div>
+                <div className="mt-5 space-y-3">{examItems.filter((exam) => exam.student_status !== "completed").slice(0, 3).map((exam) => <Link key={exam.id} href="/cbt" className="block rounded-xl border-l-2 border-blue-500 bg-slate-50 p-3"><span className="text-[10px] font-bold uppercase tracking-wider text-blue-700">{exam.student_status === "in_progress" ? "In progress" : "CBT exam"}</span><h3 className="mt-1 text-sm font-semibold">{exam.subject} · {exam.title}</h3><p className="mt-1 text-xs text-slate-500">{exam.duration_minutes} minutes</p></Link>)}{timetableItems.slice(0, 3).map((entry) => <Link key={entry.id} href="/timetable" className="block rounded-xl border-l-2 border-violet-500 bg-slate-50 p-3"><span className="text-[10px] font-bold uppercase tracking-wider text-violet-700">{entry.day_of_week} · Period {entry.period}</span><h3 className="mt-1 text-sm font-semibold">{entry.subject}</h3><p className="mt-1 text-xs text-slate-500">{entry.start_time.slice(0, 5)}{entry.teacher ? ` · ${entry.teacher}` : ""}</p></Link>)}{!examItems.some((exam) => exam.student_status !== "completed") && timetableItems.length === 0 && <p className="rounded-xl bg-slate-50 p-5 text-center text-sm text-slate-500">No published exams or timetable entries are available for this period.</p>}</div>
               </section>
             </div>
 
             <section id="announcements" className="dashboard-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6" style={{ animationDelay: "220ms" }}>
-              <div>
-                <h2 className="text-lg font-bold">Announcements</h2>
-                <p className="mt-1 text-sm text-slate-500">Sample notice preview · no official announcements are configured yet</p>
-              </div>
+              <SectionHeading eyebrow="School updates" title="Announcements" description="Latest notices published for your class." action={<Link href="/announcements" className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-blue-800 hover:bg-blue-50">All announcements</Link>} />
               <div className="mt-5 grid gap-4 lg:grid-cols-3">
-                {announcements.map((announcement) => (
-                  <article key={announcement.title} className="rounded-xl border border-slate-100 p-4">
-                    <div className="flex items-center justify-between gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${announcement.tone}`}>{announcement.category}</span><time className="text-xs text-slate-400">{announcement.date}</time></div>
+                {announcementItems.slice(0, 3).map((announcement) => (
+                  <article key={announcement.id} className="rounded-xl border border-slate-100 p-4">
+                    <div className="flex items-center justify-between gap-2"><span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">{announcement.category}</span><time className="text-xs text-slate-400">{new Date(announcement.published_at ?? announcement.created_at).toLocaleDateString("en-NG", { day: "numeric", month: "short" })}</time></div>
                     <h3 className="mt-3 text-sm font-semibold">{announcement.title}</h3>
-                    <p className="mt-1 text-sm leading-6 text-slate-500">{announcement.detail}</p>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">{announcement.description}</p>
                   </article>
                 ))}
+                {announcementItems.length === 0 && <p className="rounded-xl border border-slate-100 p-6 text-center text-sm text-slate-500 lg:col-span-3">There are no published announcements for your class.</p>}
               </div>
             </section>
 
-            <section id="fees" className="dashboard-rise flex flex-col justify-between gap-4 rounded-2xl bg-blue-700 p-5 text-white shadow-sm sm:flex-row sm:items-center sm:p-6" style={{ animationDelay: "260ms" }}>
-              <div><p className="text-sm font-medium text-blue-100">School Fees</p><h2 className="mt-1 text-lg font-bold">Fee information and payment updates</h2><p className="mt-1 text-sm text-blue-100">Contact the school office for your current fee balance.</p></div>
-              <a href="/fees" className="inline-flex shrink-0 justify-center rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-blue-800 transition-colors hover:bg-blue-50">View fee details</a>
+            <section id="fees" className="dashboard-rise rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6" style={{ animationDelay: "260ms" }}>
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-blue-700">Fee account</p><h2 className="mt-1 text-xl font-bold">Fees and payments</h2><p className="mt-1 text-sm text-slate-500">Live balance from your recorded fee items and payments.</p></div><Link href="/fees" className="rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-blue-900/10 hover:bg-blue-800">Open fee account</Link></div>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2"><MetricCard label="Total due" value={feeSummary ? `₦${Number(feeSummary.total_due).toLocaleString("en-NG")}` : "Loading"} detail={`${feeSummary?.fee_items.length ?? 0} active fee items`} tone="blue" icon="₦" /><MetricCard label="Total paid" value={feeSummary ? `₦${Number(feeSummary.total_paid).toLocaleString("en-NG")}` : "Loading"} detail={`${feeSummary?.payments.filter((payment) => payment.status === "completed").length ?? 0} completed payments`} tone="emerald" icon="✓" /></div>
+              {feeSummary && feeSummary.total_due > 0 && <div className="mt-5"><div className="mb-2 flex justify-between text-xs font-medium text-slate-500"><span>Paid toward current fees</span><span>{Math.min(100, Math.round(feeSummary.total_paid / feeSummary.total_due * 100))}%</span></div><ProgressMeter value={feeSummary.total_paid / feeSummary.total_due * 100} label="Paid toward current fees" tone="emerald" /></div>}
             </section>
 
             <footer className="pb-2 text-center text-xs text-slate-400">© 2026 Unialege · Secondary Student Portal</footer>

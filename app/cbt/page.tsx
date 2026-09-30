@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ProgressMeter, SectionHeading } from "../components/portal-ui";
 
 type Exam = {
   id: string; title: string; subject: string; class_name: string; category: string | null;
@@ -197,8 +198,8 @@ export default function CbtPage() {
 
   return <main className="app-shell min-h-screen bg-slate-50 text-slate-900">
     <div className="mx-auto min-h-screen max-w-6xl px-4 py-6 sm:px-7 sm:py-9">
-      <header className="mb-7 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-        <div><p className="text-xs font-semibold uppercase tracking-widest text-blue-700">Student Portal</p><h1 className="mt-1 text-2xl font-bold">CBT / Exams</h1><p className="mt-1 text-sm text-slate-500">Published assessments for your class, subjects and stream.</p></div>
+      <header className="mb-7 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
+        <SectionHeading eyebrow="Student portal" title="CBT / Exams" description="Published assessments for your class, subjects and stream." />
         <Link href="/dashboard" className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Back to dashboard</Link>
       </header>
 
@@ -213,12 +214,13 @@ export default function CbtPage() {
         <button type="button" onClick={() => { setSubmission(null); setSelectedExam(null); updateAttempt(null); void loadExams(); }} className="mt-6 rounded-xl bg-blue-700 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-800">Return to exams</button>
       </section>}
 
-      {!loading && !submission && attempt && selectedExam && attempt.status === "in_progress" && <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-8">
+      {!loading && !submission && attempt && selectedExam && attempt.status === "in_progress" && <section className="cbt-attempt rounded-2xl border border-slate-100 bg-white p-5 shadow-sm sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5">
           <div><p className="text-xs font-semibold uppercase tracking-widest text-blue-700">{selectedExam.subject} · {selectedExam.class_name} · {categoryLabel(selectedExam.category)}</p><h2 className="mt-1 text-xl font-bold">{selectedExam.title}</h2><p className="mt-1 text-sm text-slate-500">Question {questionIndex + 1} of {attempt.questions.length} · {answeredCount} answered</p></div>
           <div className={`rounded-xl px-4 py-2 text-center ${secondsLeft <= 60 ? "bg-rose-50 text-rose-700" : "bg-blue-50 text-blue-800"}`} aria-live="polite"><span className="block text-[11px] font-semibold uppercase tracking-wide">Time remaining</span><span className="font-mono text-2xl font-bold">{formatTime(secondsLeft)}</span></div>
         </div>
         <div className="mt-5 flex flex-wrap gap-2" aria-label="Question progress">{attempt.questions.map((question, index) => <button key={question.id} type="button" onClick={() => setQuestionIndex(index)} aria-label={`Question ${index + 1}${question.selected_option ? ", answered" : ", unanswered"}`} aria-current={questionIndex === index ? "step" : undefined} className={`h-9 w-9 rounded-lg text-xs font-bold ${questionIndex === index ? "bg-blue-700 text-white" : question.selected_option ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>{index + 1}</button>)}</div>
+        <div className="mt-4"><ProgressMeter value={(questionIndex + 1) / attempt.questions.length * 100} label={`Question ${questionIndex + 1} of ${attempt.questions.length}`} /></div>
         {currentQuestion && <div className="mt-7 rounded-2xl bg-slate-50 p-5 sm:p-7"><p className="text-lg font-semibold leading-8">{currentQuestion.question_text}</p><div className="mt-5 grid gap-3">{(["A", "B", "C", "D"] as const).map((option) => {
           const text = currentQuestion[`option_${option.toLowerCase()}` as "option_a" | "option_b" | "option_c" | "option_d"];
           return <button key={option} type="button" onClick={() => saveAnswer(currentQuestion.id, option)} aria-pressed={currentQuestion.selected_option === option} className={`flex items-start gap-3 rounded-xl border p-4 text-left text-sm transition-colors ${currentQuestion.selected_option === option ? "border-blue-500 bg-blue-50 text-blue-900" : "border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/50"}`}><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-current text-xs font-bold">{option}</span><span className="pt-1 leading-6">{text}</span></button>;

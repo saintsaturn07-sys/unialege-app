@@ -3,7 +3,7 @@ import { assertSameOrigin, noStoreHeaders, requireAdmin } from "../../../lib/ser
 import { normalizeAdmissionNumber } from "../../../lib/student-store";
 import { isSeniorClass, requiresTradeSubject, tradeSubjects } from "../../../lib/subjects";
 
-const fields = "id, created_at, full_name, admission_number, class_name, session, term, field_of_study, trade_subject";
+const fields = "id, created_at, full_name, admission_number, class_name, session, term, field_of_study, trade_subject, phone, parent_guardian_name, parent_guardian_phone, is_active";
 type Input = Record<string, unknown>;
 function studentData(body: Input) {
   const full_name = typeof body.fullName === "string" ? body.fullName.trim() : "";
@@ -13,11 +13,16 @@ function studentData(body: Input) {
   const term = typeof body.term === "string" ? body.term.trim() : "";
   const field_of_study = body.fieldOfStudy === "science" || body.fieldOfStudy === "commercial" || body.fieldOfStudy === "art" ? body.fieldOfStudy : null;
   const trade_subject = typeof body.tradeSubject === "string" && tradeSubjects.includes(body.tradeSubject) ? body.tradeSubject : null;
+  const parent_guardian_name = typeof body.parentGuardianName === "string" ? body.parentGuardianName.trim() : "";
+  const parent_guardian_phone = typeof body.parentGuardianPhone === "string" ? body.parentGuardianPhone.trim() : "";
   if (!full_name || !admission_number || !class_name || !session || !term) throw new Error("Complete all required student fields.");
+  if (parent_guardian_name.length > 100) throw new Error("Parent or guardian name must be 100 characters or fewer.");
+  if (parent_guardian_phone && !validPhone(parent_guardian_phone)) throw new Error("Enter a valid parent or guardian phone number.");
   if (isSeniorClass(class_name) && !field_of_study) throw new Error("Select a valid field of study for this senior student.");
   if (requiresTradeSubject(class_name) && !trade_subject) throw new Error("Select a valid trade subject for this student.");
-  return { full_name, admission_number, class_name, session, term, field_of_study: isSeniorClass(class_name) ? field_of_study : null, trade_subject: requiresTradeSubject(class_name) ? trade_subject : null };
+  return { full_name, admission_number, class_name, session, term, field_of_study: isSeniorClass(class_name) ? field_of_study : null, trade_subject: requiresTradeSubject(class_name) ? trade_subject : null, parent_guardian_name: parent_guardian_name || null, parent_guardian_phone: parent_guardian_phone || null };
 }
+function validPhone(value: string) { const digits = value.replace(/\D/g, ""); return /^\+?[0-9][0-9\s().-]{5,19}$/.test(value) && digits.length >= 7 && digits.length <= 15; }
 function authEmail(studentId: string) { return `student.${studentId}@students.unialege.invalid`; }
 
 export async function GET() {
@@ -43,7 +48,7 @@ export async function POST(request: Request) {
     const provisionalId = crypto.randomUUID();
     const { data: auth, error: authError } = await db.auth.admin.createUser({ email: authEmail(provisionalId), password, email_confirm: true, user_metadata: { student_id: provisionalId } });
     if (authError || !auth.user) return Response.json({ error: "Unable to create the student's secure sign-in. Check the password and try again." }, { status: 400, headers: noStoreHeaders() });
-    const { data, error } = await db.from("students").insert({ id: provisionalId, ...record, password: null, auth_user_id: auth.user.id }).select(fields).single();
+    const { data, error } = await db.from("students").insert({ id: provisionalId, ...record, password: null, auth_user_id: auth.user.id, is_active: true }).select(fields).single();
     if (error) { await db.auth.admin.deleteUser(auth.user.id); throw error; }
     return Response.json({ student: data }, { status: 201, headers: noStoreHeaders() });
   } catch (error) {

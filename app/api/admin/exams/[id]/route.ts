@@ -1,5 +1,6 @@
 import { assertSameOrigin, noStoreHeaders, requireAdmin } from "../../../../lib/server-session";
 import { getSupabaseAdmin } from "../../../../lib/supabase-admin";
+import { normalizeQuestionBankSubject } from "../../../../lib/question-bank-subject";
 
 type Context = { params: Promise<{ id: string }> };
 export async function PATCH(request: Request, context: Context) {
@@ -12,16 +13,17 @@ export async function PATCH(request: Request, context: Context) {
   const questionCount = Number(body.question_count);
   const status = body.status === "published" ? "published" : body.status === "draft" ? "draft" : "";
   const title = typeof body.title === "string" ? body.title.trim() : "";
-  const subject = typeof body.subject === "string" ? body.subject.trim() : "";
+  const subject = typeof body.subject === "string" ? normalizeQuestionBankSubject(body.subject) : "";
   const className = typeof body.class_name === "string" ? body.class_name.trim() : "";
   const session = typeof body.session === "string" ? body.session.trim() : "";
   const term = typeof body.term === "string" ? body.term.trim() : "";
+  const assessmentType = body.assessment_type === "formal" || body.assessment_type === "mock" || body.assessment_type === "unclassified" ? body.assessment_type : "";
   const category = typeof body.category === "string" && body.category.trim() ? body.category.trim().toLowerCase() : null;
   const topic = typeof body.topic === "string" ? body.topic.trim() || null : null;
-  if (!title || !subject || !className || !session || !term || !status || (category !== null && !["science", "commercial", "arts"].includes(category)) || !Number.isInteger(duration) || duration < 1 || duration > 600 || !Number.isInteger(questionCount) || questionCount < 1 || questionCount > 500) {
+  if (!title || !subject || !className || !session || !term || !status || !assessmentType || (category !== null && !["science", "commercial", "arts"].includes(category)) || !Number.isInteger(duration) || duration < 1 || duration > 600 || !Number.isInteger(questionCount) || questionCount < 1 || questionCount > 500) {
     return Response.json({ error: "Enter valid exam details, duration, and question count." }, { status: 400, headers: noStoreHeaders() });
   }
-  const { data, error } = await getSupabaseAdmin().from("exams").update({ title, subject, class_name: className, session, term, duration_minutes: duration, status, question_count: questionCount, category, topic }).eq("id", id).select("*").maybeSingle();
+  const { data, error } = await getSupabaseAdmin().from("exams").update({ title, subject, class_name: className, session, term, duration_minutes: duration, status, assessment_type: assessmentType, question_count: questionCount, category, topic }).eq("id", id).select("*").maybeSingle();
   if (error) return Response.json({ error: "Unable to update exam." }, { status: 500, headers: noStoreHeaders() });
   if (!data) return Response.json({ error: "Exam not found." }, { status: 404, headers: noStoreHeaders() });
   return Response.json({ exam: data }, { headers: noStoreHeaders() });

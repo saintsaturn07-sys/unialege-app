@@ -3,7 +3,7 @@ import { assertSameOrigin, noStoreHeaders, requireAdmin } from "../../../../lib/
 import { normalizeAdmissionNumber } from "../../../../lib/student-store";
 import { isSeniorClass, requiresTradeSubject, tradeSubjects } from "../../../../lib/subjects";
 
-const fields = "id, created_at, full_name, admission_number, class_name, session, term, field_of_study, trade_subject";
+const fields = "id, created_at, full_name, admission_number, class_name, session, term, field_of_study, trade_subject, phone, parent_guardian_name, parent_guardian_phone, is_active";
 type Context = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, context: Context) {
@@ -13,6 +13,12 @@ export async function PATCH(request: Request, context: Context) {
   let body: Input;
   try { body = await request.json() as Input; } catch { return Response.json({ error: "Invalid student data." }, { status: 400, headers: noStoreHeaders() }); }
   const db = getSupabaseAdmin();
+  if (typeof body.isActive === "boolean" && Object.keys(body).length === 1) {
+    const { data, error } = await db.from("students").update({ is_active: body.isActive }).eq("id", id).select(fields).maybeSingle();
+    if (error) return Response.json({ error: "Unable to update student account status." }, { status: 500, headers: noStoreHeaders() });
+    if (!data) return Response.json({ error: "Student not found." }, { status: 404, headers: noStoreHeaders() });
+    return Response.json({ student: data }, { headers: noStoreHeaders() });
+  }
   try {
     const full_name = typeof body.fullName === "string" ? body.fullName.trim() : "";
     const admission_number = typeof body.admissionNumber === "string" ? normalizeAdmissionNumber(body.admissionNumber) : "";
@@ -21,7 +27,11 @@ export async function PATCH(request: Request, context: Context) {
     const term = typeof body.term === "string" ? body.term.trim() : "";
     const field_of_study = body.fieldOfStudy === "science" || body.fieldOfStudy === "commercial" || body.fieldOfStudy === "art" ? body.fieldOfStudy : null;
     const trade_subject = typeof body.tradeSubject === "string" && tradeSubjects.includes(body.tradeSubject) ? body.tradeSubject : null;
+    const parent_guardian_name = typeof body.parentGuardianName === "string" ? body.parentGuardianName.trim() : "";
+    const parent_guardian_phone = typeof body.parentGuardianPhone === "string" ? body.parentGuardianPhone.trim() : "";
     if (!full_name || !admission_number || !class_name || !session || !term) throw new Error("Complete all required student fields.");
+    if (parent_guardian_name.length > 100) throw new Error("Parent or guardian name must be 100 characters or fewer.");
+    if (parent_guardian_phone && !validPhone(parent_guardian_phone)) throw new Error("Enter a valid parent or guardian phone number.");
     if (isSeniorClass(class_name) && !field_of_study) throw new Error("Select a valid field of study for this senior student.");
     if (requiresTradeSubject(class_name) && !trade_subject) throw new Error("Select a valid trade subject for this student.");
     const { data: student, error: findError } = await db.from("students").select("id, auth_user_id, password").eq("id", id).maybeSingle();
@@ -34,7 +44,8 @@ export async function PATCH(request: Request, context: Context) {
     const password = typeof body.password === "string" ? body.password : "";
     const changed: Record<string, unknown> = { full_name, admission_number, class_name, session, term,
       field_of_study: isSeniorClass(class_name) ? field_of_study : null,
-      trade_subject: requiresTradeSubject(class_name) ? trade_subject : null };
+      trade_subject: requiresTradeSubject(class_name) ? trade_subject : null,
+      parent_guardian_name: parent_guardian_name || null, parent_guardian_phone: parent_guardian_phone || null };
     if (password) {
       if (password.length < 6) return Response.json({ error: "Set a password of at least 6 characters." }, { status: 400, headers: noStoreHeaders() });
       if (student.auth_user_id) {
@@ -71,6 +82,7 @@ export async function PATCH(request: Request, context: Context) {
 }
 
 function authEmail(studentId: string) { return `student.${studentId}@students.unialege.invalid`; }
+function validPhone(value: string) { const digits = value.replace(/\D/g, ""); return /^\+?[0-9][0-9\s().-]{5,19}$/.test(value) && digits.length >= 7 && digits.length <= 15; }
 
 type Input = Record<string, unknown>;
 
