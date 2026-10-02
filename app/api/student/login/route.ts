@@ -74,11 +74,6 @@ export async function POST(request: Request) {
     } }, { headers: noStoreHeaders() });
   } catch (error) {
     const errorName = error instanceof Error ? error.name : "UnknownError";
-    let errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-    for (const secret of [process.env.SUPABASE_SERVICE_ROLE_KEY, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY]) {
-      if (secret) errorMessage = errorMessage.replaceAll(secret, "[REDACTED]");
-    }
-    console.error("[student-login] Request failed", { stage, errorName, errorMessage });
-    return Response.json({ error: "Unable to check your login right now. Please try again." }, { status: 503, headers: noStoreHeaders() });
+    return Response.json({ error: "LOGIN_SERVER_ERROR", stage, errorName, errorMessage: error instanceof Error ? error.message.slice(0, 300) : "An unknown error occurred." }, { status: 503, headers: noStoreHeaders() });
   }
 }
