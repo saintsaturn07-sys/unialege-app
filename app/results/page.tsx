@@ -112,8 +112,8 @@ export default function ResultsPage() {
       const response = await fetch(`/api/student/results/report?session=${encodeURIComponent(session)}&term=${encodeURIComponent(term)}`, { cache: "no-store", credentials: "same-origin" });
       if (!response.ok) { const body = await response.json().catch(() => ({})) as { error?: string }; throw new Error(body.error ?? "Unable to download your report."); }
       const blob = await response.blob(); const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
-      anchor.href = url; anchor.download = `unialege-report-${student?.admissionNumber ?? "student"}-${term.toLowerCase().replaceAll(" ", "-")}.csv`; anchor.click(); URL.revokeObjectURL(url);
-      setDownloadMessage("Your report downloaded. You can open the CSV in a spreadsheet or print it to PDF.");
+      anchor.href = url; anchor.download = `unialege-report-${student?.admissionNumber ?? "student"}-${term.toLowerCase().replaceAll(" ", "-")}.pdf`; anchor.click(); URL.revokeObjectURL(url);
+      setDownloadMessage("Your PDF report card downloaded and is ready to print.");
     } catch (error) { setDownloadMessage(error instanceof Error ? error.message : "Unable to download your report."); }
     finally { setDownloading(false); }
   }
