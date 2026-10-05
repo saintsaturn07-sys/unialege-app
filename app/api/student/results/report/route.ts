@@ -1,5 +1,6 @@
 import { noStoreHeaders, requireStudent } from "../../../../lib/server-session";
 import { getSupabaseAdmin } from "../../../../lib/supabase-admin";
+import { getSubjectsForStudent } from "../../../../lib/subjects";
 
 type Row = { student_id: string; subject: string; ca_score: number | string; exam_score: number | string };
 function grade(total: number) { return total >= 75 ? "A" : total >= 65 ? "B" : total >= 55 ? "C" : total >= 45 ? "D" : total >= 40 ? "E" : "F"; }
@@ -37,14 +38,18 @@ export async function GET(request: Request) {
   }
   const ownGroups = new Map<string, Row[]>();
   for (const row of (ownRaw ?? []) as Row[]) ownGroups.set(row.subject, [...(ownGroups.get(row.subject) ?? []), row]);
-  const subjects = [...ownGroups.entries()].flatMap(([subject, rows]) => {
-    if (rows.length !== 1) return [];
-    const row = rows[0]; const ca = Number(row.ca_score); const exam = Number(row.exam_score); const total = ca + exam;
+  const validOwnBySubject = new Map((valid.get(student.id) ?? []).map((row) => [row.subject, row]));
+  const applicableSubjects = getSubjectsForStudent(student.class_name ?? "", student.field_of_study, student.trade_subject);
+  const subjects = applicableSubjects.map(({ name: subject }) => {
+    const ownSubjectRows = ownGroups.get(subject) ?? [];
+    const row = ownSubjectRows.length === 1 ? validOwnBySubject.get(subject) : undefined;
+    if (!row) return { subject, ca: "None", exam: "None", total: "None", grade: "None", position: null as number | null };
+    const ca = Number(row.ca_score); const exam = Number(row.exam_score); const total = ca + exam;
     const classmates = [...valid.values()].map((scores) => scores.find((entry) => entry.subject === subject)).filter((entry): entry is Row => Boolean(entry));
     const position = classmates.length >= 2 ? 1 + classmates.filter((entry) => Number(entry.ca_score) + Number(entry.exam_score) > total).length : null;
-    return [{ subject, ca, exam, total, grade: grade(total), position }];
+    return { subject, ca, exam, total, grade: grade(total), position };
   });
-  const ownRows = valid.get(student.id) ?? [];
+  const ownRows = (valid.get(student.id) ?? []).filter((row) => applicableSubjects.some(({ name }) => name === row.subject));
   const total = ownRows.reduce((sum, row) => sum + Number(row.ca_score) + Number(row.exam_score), 0);
   const maximum = ownRows.length * 100;
   const eligible = [...valid.entries()].filter(([, rows]) => rows.length >= 3).map(([id, rows]) => ({ id, avg: rows.reduce((sum, row) => sum + Number(row.ca_score) + Number(row.exam_score), 0) / (rows.length * 100) }));
@@ -53,8 +58,8 @@ export async function GET(request: Request) {
   const lines = [
     ["UniAllege School Report", ""], ["Student", student.full_name], ["Admission Number", student.admission_number], ["Class", student.class_name], ["Session", session], ["Term", term], ["", ""],
     ["Subject", "CA / 30", "Exam / 70", "Total / 100", "Grade", "Subject Position"],
-    ...subjects.map((row) => [row.subject, row.ca, row.exam, row.total, row.grade, row.position ?? "Not available"]),
-    ["", ""], ["Total Marks", maximum ? `${total} / ${maximum}` : "Not available"], ["Overall Percentage / Average", maximum ? `${(total / maximum * 100).toFixed(2)}%` : "Not available"], ["Overall Class Position", overallPosition ?? "Not available"],
+    ...subjects.map((row) => [row.subject, row.ca, row.exam, row.total, row.grade, row.position ?? "None"]),
+    ["", ""], ["Total Marks", maximum ? `${total} / ${maximum}` : "None"], ["Overall Percentage / Average", maximum ? `${(total / maximum * 100).toFixed(2)}%` : "None"], ["Overall Class Position", overallPosition ?? "None"],
     ["Teacher Comment", "Not available in the current results data"], ["Principal Comment", "Not available in the current results data"],
   ];
   const body = `\uFEFF${lines.map((line) => line.map(csv).join(",")).join("\r\n")}`;

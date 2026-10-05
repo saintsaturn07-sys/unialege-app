@@ -6,38 +6,6 @@ import { assertSameOrigin, noStoreHeaders, setStudentCookie } from "../../../lib
 
 type StudentLoginBody = { admissionNumber?: unknown; password?: unknown };
 
-function safeDiagnosticText(value: unknown, secrets: string[] = []): string | undefined {
-  if (typeof value !== "string") return undefined;
-  let text = value;
-  for (const secret of secrets) if (secret) text = text.split(secret).join("[REDACTED]");
-  return text
-    .replace(/\b(password|passwd|token|api[_-]?key|authorization|cookie|secret)\b\s*([=:])\s*([^\s,;]+)/gi, "$1$2[REDACTED]")
-    .replace(/\bBearer\s+[^\s,;]+/gi, "Bearer [REDACTED]")
-    .replace(/\b(?:sb_secret_|sb_publishable_|sk_live_|sk_test_)[a-zA-Z0-9_-]+\b/g, "[REDACTED]")
-    .replace(/\beyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/g, "[REDACTED]")
-    .slice(0, 500);
-}
-
-function diagnosticError(error: unknown, secrets: string[], depth = 0): Record<string, unknown> {
-  if (depth > 2) return { errorCause: "[cause omitted]" };
-  const value = error !== null && typeof error === "object" ? error as Record<string, unknown> : {};
-  const name = error instanceof Error ? error.name : safeDiagnosticText(value.name, secrets) ?? "UnknownError";
-  const message = error instanceof Error ? error.message : value.message;
-  const output: Record<string, unknown> = {
-    errorName: safeDiagnosticText(name, secrets) ?? "UnknownError",
-    errorMessage: safeDiagnosticText(message, secrets) ?? "An unknown error occurred.",
-  };
-  for (const key of ["code", "details", "hint"] as const) {
-    if (key in value && value[key] !== undefined && value[key] !== null) {
-      output[`error${key[0].toUpperCase()}${key.slice(1)}`] = safeDiagnosticText(value[key], secrets) ?? "[non-string value omitted]";
-    }
-  }
-  if ("cause" in value && value.cause !== undefined) {
-    output.errorCause = diagnosticError(value.cause, secrets, depth + 1);
-  }
-  return output;
-}
-
 function authEmail(studentId: string) { return `student.${studentId}@students.unialege.invalid`; }
 
 export async function POST(request: Request) {
@@ -104,8 +72,7 @@ export async function POST(request: Request) {
       parentGuardianName: student.parent_guardian_name ?? "", parentGuardianPhone: student.parent_guardian_phone ?? "", fieldOfStudy: student.field_of_study ?? null,
       tradeSubject: student.trade_subject ?? null, email: linkedAuth.user.email, phone: student.phone ?? "",
     } }, { headers: noStoreHeaders() });
-  } catch (error) {
-    const secrets = [password, process.env.SUPABASE_SERVICE_ROLE_KEY, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY].filter((value): value is string => Boolean(value));
-    return Response.json({ error: "LOGIN_SERVER_ERROR", stage, ...diagnosticError(error, secrets) }, { status: 503, headers: noStoreHeaders() });
+  } catch {
+    return Response.json({ error: "Unable to check your login right now. Please try again." }, { status: 503, headers: noStoreHeaders() });
   }
 }
