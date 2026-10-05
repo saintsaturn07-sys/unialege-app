@@ -109,7 +109,7 @@ export default function ResultsPage() {
   async function downloadReport() {
     setDownloading(true); setDownloadMessage("");
     try {
-      const response = await fetch(`/api/student/results/report?session=${encodeURIComponent(session)}&term=${encodeURIComponent(term)}`, { cache: "no-store", credentials: "same-origin" });
+      const response = await fetch(`/api/student/results/report/pdf?session=${encodeURIComponent(session)}&term=${encodeURIComponent(term)}`, { cache: "no-store", credentials: "same-origin" });
       if (!response.ok) { const body = await response.json().catch(() => ({})) as { error?: string }; throw new Error(body.error ?? "Unable to download your report."); }
       const blob = await response.blob(); const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
       anchor.href = url; anchor.download = `unialege-report-${student?.admissionNumber ?? "student"}-${term.toLowerCase().replaceAll(" ", "-")}.pdf`; anchor.click(); URL.revokeObjectURL(url);
