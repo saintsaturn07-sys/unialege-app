@@ -62,7 +62,21 @@ export async function POST(request: Request) {
     stage = "authenticate_student";
     const { data: authResult, error: authError } = await authClient.auth.signInWithPassword({ email: linkedAuth.user.email, password });
     if (authError || !authResult.user || authResult.user.id !== authUserId) {
-      return Response.json({ error: "Unable to sign in with the linked secure account. Contact the school administrator to reset the password." }, { status: 401, headers: noStoreHeaders() });
+      const errorName = (authError?.name ?? (!authResult.user ? "MissingAuthUser" : "AuthUserMismatch")).replace(/[^a-zA-Z0-9_.-]/g, "").slice(0, 80) || "UnknownError";
+      const errorCode = typeof authError?.code === "string" ? authError.code.replace(/[^a-zA-Z0-9_.-]/g, "").slice(0, 80) : null;
+      const errorStatus = typeof authError?.status === "number" ? authError.status : null;
+      let errorMessage = authError?.message ?? (!authResult.user ? "Supabase Auth returned no user." : "Supabase Auth returned a different user.");
+      for (const secret of [password, linkedAuth.user.email, supabaseUrl, anonKey, process.env.SUPABASE_SERVICE_ROLE_KEY]) {
+        if (secret) errorMessage = errorMessage.replaceAll(secret, "[REDACTED]");
+      }
+      errorMessage = errorMessage
+        .replace(/https?:\/\/[^\s"'<>]+/gi, "[REDACTED_URL]")
+        .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]")
+        .replace(/\bBearer\s+\S+/gi, "Bearer [REDACTED]")
+        .replace(/\b(?:sb_(?:secret|publishable)_[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b/g, "[REDACTED]")
+        .replace(/\b(?:authorization|cookie|set-cookie)\s*[:=]\s*[^\r\n]*/gi, "[REDACTED_HEADER]")
+        .slice(0, 500);
+      return Response.json({ error: "LOGIN_AUTH_ERROR", stage: "authenticate_student", errorName, errorCode, errorStatus, errorMessage }, { status: 401, headers: noStoreHeaders() });
     }
     stage = "set_student_session";
     await setStudentCookie(authUserId);
