@@ -72,7 +72,20 @@ export async function POST(request: Request) {
       parentGuardianName: student.parent_guardian_name ?? "", parentGuardianPhone: student.parent_guardian_phone ?? "", fieldOfStudy: student.field_of_study ?? null,
       tradeSubject: student.trade_subject ?? null, email: linkedAuth.user.email, phone: student.phone ?? "",
     } }, { headers: noStoreHeaders() });
-  } catch {
-    return Response.json({ error: "Unable to check your login right now. Please try again." }, { status: 503, headers: noStoreHeaders() });
+  } catch (error) {
+    const safeStages = ["initialize_supabase_admin", "load_student_record", "provision_auth_user", "link_auth_user", "load_linked_auth_user", "authenticate_student", "set_student_session"] as const;
+    const safeStage = (safeStages as readonly string[]).includes(stage) ? stage : "unknown";
+    const safeErrorName = (error instanceof Error ? error.name : "UnknownError").replace(/[^a-zA-Z0-9_.-]/g, "").slice(0, 80) || "UnknownError";
+    let safeErrorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+    for (const secret of [process.env.SUPABASE_SERVICE_ROLE_KEY, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY]) {
+      if (secret) safeErrorMessage = safeErrorMessage.replaceAll(secret, "[REDACTED]");
+    }
+    safeErrorMessage = safeErrorMessage
+      .replace(/https?:\/\/[^\s"'<>]+/gi, "[REDACTED_URL]")
+      .replace(/\bBearer\s+\S+/gi, "Bearer [REDACTED]")
+      .replace(/\b(?:sb_(?:secret|publishable)_[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b/g, "[REDACTED]")
+      .replace(/\b(?:authorization|cookie|set-cookie)\s*[:=]\s*[^\r\n]*/gi, "[REDACTED_HEADER]")
+      .slice(0, 500);
+    return Response.json({ error: "LOGIN_SERVER_ERROR", stage: safeStage, errorName: safeErrorName, errorMessage: safeErrorMessage }, { status: 503, headers: noStoreHeaders() });
   }
 }
