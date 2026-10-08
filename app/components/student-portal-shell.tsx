@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ArrowUpRight, Bell, BookOpen, CalendarDays, CheckCircle2, ClipboardList, House, LogOut, Menu, UserRound, Wallet, X } from "lucide-react";
 import type { StudentSession } from "../lib/student-store";
 
@@ -13,7 +13,35 @@ const groups = [
 
 export function StudentPortalShell({ title, student, period, onLogout, children }: { title: string; student?: StudentSession | null; period?: string; onLogout?: () => void; children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const initials = student?.fullName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() ?? "U";
+
+  useEffect(() => {
+    if (!student) { setUnreadCount(0); return; }
+    let active = true;
+    const refreshUnreadCount = async () => {
+      try {
+        const response = await fetch("/api/student/announcements", { cache: "no-store", credentials: "same-origin" });
+        if (!response.ok) return;
+        const result = await response.json() as { unread_count?: number };
+        if (active && typeof result.unread_count === "number") setUnreadCount(result.unread_count);
+      } catch { /* Keep the last server-confirmed count while offline. */ }
+    };
+    const onReadStateChange = (event: Event) => {
+      const count = (event as CustomEvent<{ unread_count?: unknown }>).detail?.unread_count;
+      if (typeof count === "number") setUnreadCount(count);
+      else void refreshUnreadCount();
+    };
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") void refreshUnreadCount(); };
+    void refreshUnreadCount();
+    window.addEventListener("unialege:announcement-read-state", onReadStateChange);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      active = false;
+      window.removeEventListener("unialege:announcement-read-state", onReadStateChange);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [student?.id]);
   return <div className="min-h-screen bg-[#f5f6fa] text-slate-900 dark:bg-slate-950 dark:text-slate-100 md:flex">
     <div className={`${open ? "fixed inset-0 z-40 bg-slate-950/55" : "hidden"} md:sticky md:top-0 md:block md:h-screen md:w-[264px] md:shrink-0`} onClick={() => setOpen(false)}>
       <aside onClick={(event) => event.stopPropagation()} className={`absolute inset-y-0 left-0 flex w-[278px] max-w-[86vw] flex-col bg-[#111827] text-slate-300 shadow-2xl transition-transform md:relative md:h-screen md:w-full md:max-w-none md:shadow-none ${open ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}>
@@ -24,7 +52,7 @@ export function StudentPortalShell({ title, student, period, onLogout, children 
       </aside>
     </div>
     <div className="min-w-0 flex-1">
-      <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/95 sm:px-7 lg:px-9"><div className="flex min-w-0 items-center gap-3"><button type="button" onClick={() => setOpen(true)} aria-label="Open navigation" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300 md:hidden"><Menu className="h-5 w-5" /></button><div className="min-w-0"><p className="truncate text-[11px] text-slate-400">Student portal <span className="px-1 text-slate-300">/</span>{title}</p><h1 className="mt-0.5 truncate text-sm font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h1></div></div><div className="flex shrink-0 items-center gap-2 sm:gap-4">{period && <span className="hidden text-right text-[11px] text-slate-500 sm:block">{period}</span>}<Link href="/announcements" aria-label="Announcements" className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-300"><Bell className="h-[18px] w-[18px]" /></Link>{student && <Link href="/profile" aria-label={`${student.fullName} profile`} className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700 dark:bg-indigo-400/15 dark:text-indigo-200">{initials}</Link>}</div></header>
+      <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/95 sm:px-7 lg:px-9"><div className="flex min-w-0 items-center gap-3"><button type="button" onClick={() => setOpen(true)} aria-label="Open navigation" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300 md:hidden"><Menu className="h-5 w-5" /></button><div className="min-w-0"><p className="truncate text-[11px] text-slate-400">Student portal <span className="px-1 text-slate-300">/</span>{title}</p><h1 className="mt-0.5 truncate text-sm font-semibold tracking-tight text-slate-900 dark:text-white">{title}</h1></div></div><div className="flex shrink-0 items-center gap-2 sm:gap-4">{period && <span className="hidden text-right text-[11px] text-slate-500 sm:block">{period}</span>}<Link href="/announcements" aria-label={unreadCount > 0 ? `Announcements, ${unreadCount} unread` : "Announcements"} className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-300"><Bell className="h-[18px] w-[18px]" />{unreadCount > 0 && <span aria-hidden="true" className="absolute -right-1 -top-1 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white dark:ring-slate-900">{unreadCount > 99 ? "99+" : unreadCount}</span>}</Link>{student && <Link href="/profile" aria-label={`${student.fullName} profile`} className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700 dark:bg-indigo-400/15 dark:text-indigo-200">{initials}</Link>}</div></header>
       <main className="mx-auto w-full max-w-[1500px] space-y-6 px-4 py-6 sm:px-7 sm:py-8 lg:px-10">{children}<footer className="pb-3 text-center text-[10px] text-slate-400">© 2026 UniAllege · Student portal</footer></main>
     </div>
   </div>;

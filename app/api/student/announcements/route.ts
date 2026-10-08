@@ -15,5 +15,15 @@ export async function GET() {
     const matchesStream = item.target_stream === null || item.target_stream === student.field_of_study;
     return matchesClass && matchesStream;
   });
-  return Response.json({ announcements }, { headers: noStoreHeaders() });
+  const { data: reads, error: readsError } = await getSupabaseAdmin().from("student_announcement_reads")
+    .select("announcement_id, read_at")
+    .eq("student_id", student.id);
+  if (readsError) return Response.json({ error: "Unable to load announcement read status." }, { status: 500, headers: noStoreHeaders() });
+  const readsByAnnouncement = new Map((reads ?? []).map((read) => [read.announcement_id, read.read_at]));
+  const visibleAnnouncements = announcements.map((item) => {
+    const readAt = readsByAnnouncement.get(item.id) ?? null;
+    return { ...item, is_read: readAt !== null, read_at: readAt };
+  });
+  const unreadCount = visibleAnnouncements.filter((item) => !item.is_read).length;
+  return Response.json({ announcements: visibleAnnouncements, unread_count: unreadCount }, { headers: noStoreHeaders() });
 }
