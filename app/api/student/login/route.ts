@@ -182,10 +182,11 @@ export async function POST(request: Request) {
     }
 
     let authSucceeded = false;
-    let lastAuthError: AuthError | null = null;
+    let authAttemptCount = 0;
+    let allAttemptsWereCredentialFailures = true;
 
-    for (const publicKey of publicKeys) {
-      const authClient = createClient(supabaseUrl, publicKey, {
+    for (const key of publicKeys) {
+      const authClient = createClient(supabaseUrl, key, {
         auth: {
           autoRefreshToken: false,
           persistSession: false,
@@ -209,38 +210,27 @@ export async function POST(request: Request) {
       }
 
       if (authError) {
-        lastAuthError = authError;
-
-        // A genuine credential failure means the supplied password is wrong.
-        // Do not try another key and do not expose configuration errors as
-        // "invalid password".
-        if (isWrongCredentials(authError)) {
-          return Response.json(
-            {
-              error:
-                "Invalid admission number or password. Check your credentials or contact the school administrator.",
-            },
-            { status: 401, headers: noStoreHeaders() },
-          );
+        authAttemptCount += 1;
+        if (!isWrongCredentials(authError)) {
+          allAttemptsWereCredentialFailures = false;
         }
-
-        // A different public key may be valid, so continue to the next one.
         continue;
       }
+
+      authAttemptCount += 1;
+      allAttemptsWereCredentialFailures = false;
     }
 
     if (!authSucceeded) {
-      console.error("[student-login] Auth sign-in failed", {
-        keyVariable:
-          publicKeys.length > 1
-            ? "NEXT_PUBLIC_SUPABASE_ANON_KEY/NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
-            : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-              ? "NEXT_PUBLIC_SUPABASE_ANON_KEY"
-              : "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
-        name: lastAuthError?.name,
-        status: lastAuthError?.status,
-        code: lastAuthError?.code,
-      });
+      if (authAttemptCount > 0 && allAttemptsWereCredentialFailures) {
+        return Response.json(
+          {
+            error:
+              "Invalid admission number or password. Check your credentials or contact the school administrator.",
+          },
+          { status: 401, headers: noStoreHeaders() },
+        );
+      }
 
       return Response.json(
         {
@@ -271,12 +261,7 @@ export async function POST(request: Request) {
       },
       { headers: noStoreHeaders() },
     );
-  } catch (error) {
-    console.error("[student-login] Unexpected error", {
-      name: error instanceof Error ? error.name : undefined,
-      message: error instanceof Error ? error.message : undefined,
-    });
-
+  } catch {
     return Response.json(
       { error: "Unable to sign in right now. Please try again." },
       { status: 503, headers: noStoreHeaders() },

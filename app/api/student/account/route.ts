@@ -1,6 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
 import { assertSameOrigin, noStoreHeaders, requireStudent } from "../../../lib/server-session";
 import { getSupabaseAdmin } from "../../../lib/supabase-admin";
+import { createEmailConfirmationClient, EMAIL_CHANGE_VERIFIER_COOKIE, getPublicAppOrigin } from "../../../lib/email-confirmation";
+import { cookies } from "next/headers";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -26,10 +27,8 @@ export async function PATCH(request: Request) {
     const db = getSupabaseAdmin();
     const { data: authData, error: lookupError } = await db.auth.admin.getUserById(student.auth_user_id);
     if (lookupError || !authData.user?.email) throw new Error("Unable to verify your account. Sign in again and retry.");
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const publicKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-    if (!supabaseUrl || !publicKey) throw new Error("Supabase sign-in configuration is missing on the server.");
-    const auth = createClient(supabaseUrl, publicKey, { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } });
+    const cookieStore = await cookies();
+    const auth = createEmailConfirmationClient(cookieStore);
     const { data: signedIn, error: signInError } = await auth.auth.signInWithPassword({ email: authData.user.email, password: currentPassword });
     if (signInError || signedIn.user?.id !== student.auth_user_id) return Response.json({ error: "Your current password is incorrect." }, { status: 401, headers: noStoreHeaders() });
 
@@ -37,12 +36,18 @@ export async function PATCH(request: Request) {
     if (changesEmail && email !== authData.user.email) updates.email = email;
     if (changesPassword) updates.password = newPassword;
     if (!Object.keys(updates).length) return Response.json({ error: "Enter a different email address or a new password." }, { status: 400, headers: noStoreHeaders() });
-    const { data: updatedAuth, error: updateError } = await auth.auth.updateUser(updates);
+    const emailRedirectTo = `${getPublicAppOrigin(request.url)}/auth/confirm`;
+    const { data: updatedAuth, error: updateError } = await auth.auth.updateUser(
+      updates,
+      changesEmail ? { emailRedirectTo } : undefined,
+    );
     if (updateError) {
+      cookieStore.set(EMAIL_CHANGE_VERIFIER_COOKIE, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/auth/confirm", maxAge: 0 });
       if (/already|registered|exists/i.test(updateError.message)) return Response.json({ error: "That email address is already in use." }, { status: 409, headers: noStoreHeaders() });
       return Response.json({ error: "Supabase could not update your account. Check the details and try again." }, { status: 400, headers: noStoreHeaders() });
     }
     const confirmationRequired = Boolean(updates.email && updatedAuth.user?.email !== email);
+    if (!confirmationRequired) cookieStore.set(EMAIL_CHANGE_VERIFIER_COOKIE, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/auth/confirm", maxAge: 0 });
     return Response.json({
       email: updatedAuth.user?.email ?? authData.user.email,
       email_confirmation_required: confirmationRequired,
@@ -53,7 +58,7 @@ export async function PATCH(request: Request) {
         : updates.email ? "Email updated successfully."
         : "Password updated successfully.",
     }, { headers: noStoreHeaders() });
-  } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Unable to update your account." }, { status: 500, headers: noStoreHeaders() });
+  } catch {
+    return Response.json({ error: "Unable to update your account. Please try again." }, { status: 500, headers: noStoreHeaders() });
   }
 }
